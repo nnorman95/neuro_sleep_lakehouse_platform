@@ -1,0 +1,6 @@
+# Runtime dependencies
+python-dotenv>=1.0
+requests>=2.32
+psycopg[binary]>=3.2
+boto3>=1.34
+uuid6==2025.0.1

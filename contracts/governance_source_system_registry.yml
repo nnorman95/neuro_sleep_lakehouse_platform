@@ -1,0 +1,125 @@
+version: "v1"
+
+contract_name: "governance_source_system_registry_contract"
+
+table:
+  schema: "governance"
+  name: "source_system_registry"
+  layer: "governance"
+
+owner_role: "data_engineer"
+
+description: "Governance registry for external source systems, dataset versions, access models, sensitivity flags, and operational source status."
+
+columns:
+  - name: "source_id"
+    type: "uuid"
+    nullable: false
+    description: "Primary key for a source system registry record."
+
+  - name: "source_system"
+    type: "text"
+    nullable: false
+    description: "Internal source system identifier used across the platform."
+
+  - name: "dataset_name"
+    type: "text"
+    nullable: false
+    description: "Human-readable dataset name."
+
+  - name: "dataset_version"
+    type: "text"
+    nullable: false
+    description: "Dataset version used by the platform."
+
+  - name: "base_url"
+    type: "text"
+    nullable: false
+    description: "Base source URL for the dataset."
+
+  - name: "access_model"
+    type: "text"
+    nullable: false
+    description: "Source access model: open, credentialed, or restricted."
+
+  - name: "credential_required"
+    type: "boolean"
+    nullable: false
+    description: "Whether source access requires credentials or formal approval."
+
+  - name: "active"
+    type: "boolean"
+    nullable: false
+    description: "Whether the source is currently active in the platform."
+
+  - name: "source_owner_role"
+    type: "text"
+    nullable: false
+    description: "Role responsible for source ownership."
+
+  - name: "data_domain"
+    type: "text"
+    nullable: false
+    description: "Data domain represented by the source."
+
+  - name: "contains_health_data"
+    type: "boolean"
+    nullable: false
+    description: "Whether the source contains health-related data."
+
+  - name: "contains_patient_level_data"
+    type: "boolean"
+    nullable: false
+    description: "Whether the source contains patient-level records."
+
+  - name: "contains_direct_identifier"
+    type: "boolean"
+    nullable: false
+    description: "Whether the source is expected to contain direct identifiers."
+
+  - name: "access_policy"
+    type: "text"
+    nullable: false
+    description: "Platform access policy for this source."
+
+  - name: "status"
+    type: "text"
+    nullable: false
+    description: "Operational status of the source."
+
+  - name: "notes"
+    type: "text"
+    nullable: true
+    description: "Additional governance notes."
+
+  - name: "created_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when this source registry record was created."
+
+  - name: "updated_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when this source registry record was last updated."
+
+constraints:
+  primary_key:
+    - "source_id"
+
+  unique:
+    - ["source_system", "dataset_version"]
+
+  checks:
+    - "access_model in ('open', 'credentialed', 'restricted')"
+    - "access_policy in ('open', 'team_only', 'restricted', 'no_public_access')"
+    - "status in ('planned', 'active', 'disabled', 'deprecated')"
+
+relationships: []
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: false
+  contains_direct_identifier: false
+  classification_level: "internal"
+  access_policy: "team_only"
+  masking_policy: "none"

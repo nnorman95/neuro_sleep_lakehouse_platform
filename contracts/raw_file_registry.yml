@@ -1,0 +1,104 @@
+version: "v1"
+
+contract_name: "raw_file_registry_contract"
+
+table:
+  schema: "raw"
+  name: "file_registry"
+  layer: "raw"
+
+owner_role: "data_engineer"
+
+description: "Registry of source files ingested or planned for ingestion into the lakehouse raw layer."
+
+columns:
+  - name: "file_id"
+    type: "uuid"
+    nullable: false
+    description: "Primary key for a source file registry record."
+
+  - name: "source_system"
+    type: "text"
+    nullable: false
+    description: "Name of the external source system or dataset."
+
+  - name: "source_url"
+    type: "text"
+    nullable: true
+    description: "Original source URL when available."
+
+  - name: "bucket"
+    type: "text"
+    nullable: false
+    description: "Object storage bucket name."
+
+  - name: "object_key"
+    type: "text"
+    nullable: false
+    description: "Object storage key inside the bucket."
+
+  - name: "file_name"
+    type: "text"
+    nullable: false
+    description: "Original or normalized file name."
+
+  - name: "file_type"
+    type: "text"
+    nullable: false
+    description: "File type or extension, for example edf, xls, txt, parquet."
+
+  - name: "file_size_bytes"
+    type: "bigint"
+    nullable: true
+    description: "File size in bytes."
+
+  - name: "checksum_sha256"
+    type: "text"
+    nullable: true
+    description: "SHA256 checksum when available."
+
+  - name: "ingested_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when the file was registered or ingested."
+
+  - name: "ingestion_run_id"
+    type: "uuid"
+    nullable: true
+    description: "Reference to ops.pipeline_run.run_id."
+
+  - name: "status"
+    type: "text"
+    nullable: false
+    description: "Current ingestion status of the file."
+
+  - name: "created_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when this registry record was created."
+
+constraints:
+  primary_key:
+    - "file_id"
+
+  unique:
+    - ["bucket", "object_key"]
+
+  checks:
+    - "file_size_bytes is null or file_size_bytes >= 0"
+    - "status in ('registered', 'uploaded', 'skipped', 'duplicate', 'failed')"
+
+relationships:
+  - column: "ingestion_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: false
+  contains_direct_identifier: false
+  classification_level: "internal"
+  access_policy: "team_only"
+  masking_policy: "none"

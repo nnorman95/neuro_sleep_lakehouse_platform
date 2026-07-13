@@ -1,0 +1,101 @@
+version: "v1"
+
+contract_name: "ops_pipeline_run_contract"
+
+table:
+  schema: "ops"
+  name: "pipeline_run"
+  layer: "ops"
+
+owner_role: "data_engineer"
+
+description: "Operational log table for tracking pipeline runs, task execution status, processed rows, processed files, and error messages."
+
+columns:
+  - name: "run_id"
+    type: "uuid"
+    nullable: false
+    description: "Primary key for a pipeline run record."
+
+  - name: "pipeline_name"
+    type: "text"
+    nullable: false
+    description: "Name of the pipeline."
+
+  - name: "task_name"
+    type: "text"
+    nullable: true
+    description: "Optional task name inside the pipeline."
+
+  - name: "source_system"
+    type: "text"
+    nullable: true
+    description: "External source system or dataset name."
+
+  - name: "status"
+    type: "text"
+    nullable: false
+    description: "Execution status of the pipeline run."
+
+  - name: "started_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when the pipeline run started."
+
+
+  - name: "heartbeat_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Most recent liveness timestamp reported by the active pipeline run."
+
+  - name: "finished_at"
+    type: "timestamptz"
+    nullable: true
+    description: "Timestamp when the pipeline run finished."
+
+  - name: "rows_read"
+    type: "bigint"
+    nullable: false
+    description: "Number of rows read by the pipeline run."
+
+  - name: "rows_written"
+    type: "bigint"
+    nullable: false
+    description: "Number of rows written by the pipeline run."
+
+  - name: "files_processed"
+    type: "integer"
+    nullable: false
+    description: "Number of files processed by the pipeline run."
+
+  - name: "records_quarantined"
+    type: "integer"
+    nullable: false
+    description: "Number of records sent to quarantine."
+
+  - name: "error_message"
+    type: "text"
+    nullable: true
+    description: "Error message if the pipeline run failed or produced warnings."
+
+  - name: "created_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when this run record was created."
+
+constraints:
+  primary_key:
+    - "run_id"
+
+  checks:
+    - "status in ('started', 'success', 'failed', 'skipped', 'warning')"
+
+relationships: []
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: false
+  contains_direct_identifier: false
+  classification_level: "internal"
+  access_policy: "team_only"
+  masking_policy: "none"
