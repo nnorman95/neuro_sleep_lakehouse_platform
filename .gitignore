@@ -1,0 +1,41 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Local data and generated files
+data/*
+!data/.gitkeep
+
+logs/*
+!logs/.gitkeep
+
+# Large neuroscience/data files
+*.edf
+*.parquet
+*.h5
+*.nwb
+*.xls
+*.xlsx
+
+# Test/cache folders
+.pytest_cache/
+
+# Python packaging artifacts
+*.egg-info/
+build/
+dist/
+
+*.part
+
+*.zip

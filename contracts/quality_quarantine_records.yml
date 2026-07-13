@@ -1,0 +1,123 @@
+version: "v1"
+
+contract_name: "quality_quarantine_records_contract"
+
+table:
+  schema: "quality"
+  name: "quarantine_records"
+  layer: "quality"
+
+owner_role: "data_engineer"
+
+description: "Quality quarantine table for records that failed validation, parsing, schema checks, or data quality rules."
+
+columns:
+  - name: "quarantine_id"
+    type: "uuid"
+    nullable: false
+    description: "Primary key for a quarantined record."
+
+  - name: "source_system"
+    type: "text"
+    nullable: false
+    description: "Name of the external source system or dataset."
+
+  - name: "source_file_id"
+    type: "uuid"
+    nullable: true
+    description: "Reference to raw.file_registry.file_id when the quarantined record came from a registered source file."
+
+  - name: "record_key"
+    type: "text"
+    nullable: true
+    description: "Optional source-level record identifier, epoch identifier, row number, object key, or other trace key."
+
+  - name: "raw_payload"
+    type: "jsonb"
+    nullable: true
+    description: "Raw rejected payload or record fragment stored for debugging and later review."
+
+  - name: "payload_bucket"
+    type: "text"
+    nullable: true
+    description: "Object storage bucket for large quarantined payloads when the payload is stored outside PostgreSQL."
+
+  - name: "payload_object_key"
+    type: "text"
+    nullable: true
+    description: "Object storage key for large quarantined payloads when the payload is stored outside PostgreSQL."
+
+  - name: "payload_size_bytes"
+    type: "bigint"
+    nullable: true
+    description: "Size in bytes of the external quarantined payload."
+
+  - name: "payload_checksum_sha256"
+    type: "text"
+    nullable: true
+    description: "SHA256 checksum of the external quarantined payload when available."
+
+  - name: "error_code"
+    type: "text"
+    nullable: false
+    description: "Short machine-readable error code."
+
+  - name: "error_message"
+    type: "text"
+    nullable: false
+    description: "Human-readable explanation of the data quality issue."
+
+  - name: "severity"
+    type: "text"
+    nullable: false
+    description: "Severity level of the detected issue."
+
+  - name: "detected_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when the issue was detected."
+
+  - name: "pipeline_run_id"
+    type: "uuid"
+    nullable: true
+    description: "Reference to ops.pipeline_run.run_id."
+
+  - name: "status"
+    type: "text"
+    nullable: false
+    description: "Review status of the quarantined record."
+
+  - name: "created_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when this quarantine record was created."
+
+constraints:
+  primary_key:
+    - "quarantine_id"
+
+  checks:
+    - "severity in ('info', 'warning', 'error', 'critical')"
+    - "status in ('open', 'reviewed', 'resolved', 'ignored')"
+    - "payload_size_bytes is null or payload_size_bytes >= 0"
+
+relationships:
+  - column: "source_file_id"
+    references:
+      schema: "raw"
+      table: "file_registry"
+      column: "file_id"
+
+  - column: "pipeline_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "redact"

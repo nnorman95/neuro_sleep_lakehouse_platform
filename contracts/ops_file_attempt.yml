@@ -1,0 +1,131 @@
+version: "v1"
+
+contract_name: "ops_file_attempt_contract"
+
+table:
+  schema: "ops"
+  name: "file_attempt"
+  layer: "ops"
+
+owner_role: "data_engineer"
+
+description: "Operational history of file-processing attempts for individual objects within pipeline runs, including successful, skipped, and failed outcomes."
+
+columns:
+  - name: "attempt_id"
+    type: "uuid"
+    nullable: false
+    description: "Primary key for a file-processing attempt."
+
+  - name: "pipeline_run_id"
+    type: "uuid"
+    nullable: false
+    description: "Reference to the pipeline run that processed the object."
+
+  - name: "source_system"
+    type: "text"
+    nullable: false
+    description: "External source system or dataset name."
+
+  - name: "source_url"
+    type: "text"
+    nullable: true
+    description: "Original source URL when available."
+
+  - name: "bucket"
+    type: "text"
+    nullable: false
+    description: "Object storage bucket name."
+
+  - name: "object_key"
+    type: "text"
+    nullable: false
+    description: "Object storage key processed by this attempt."
+
+  - name: "file_name"
+    type: "text"
+    nullable: false
+    description: "Original or normalized file name."
+
+  - name: "file_type"
+    type: "text"
+    nullable: false
+    description: "File type or extension."
+
+  - name: "status"
+    type: "text"
+    nullable: false
+    description: "Lifecycle status of the file attempt."
+
+  - name: "resolution"
+    type: "text"
+    nullable: true
+    description: "Detailed successful or skipped outcome."
+
+  - name: "file_size_bytes"
+    type: "bigint"
+    nullable: true
+    description: "Uploaded file size in bytes."
+
+  - name: "checksum_sha256"
+    type: "text"
+    nullable: true
+    description: "Verified SHA256 checksum for an uploaded file."
+
+  - name: "error_type"
+    type: "text"
+    nullable: true
+    description: "Python exception type for a failed attempt."
+
+  - name: "error_message"
+    type: "text"
+    nullable: true
+    description: "Error message recorded for a failed attempt."
+
+  - name: "started_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when object processing started."
+
+  - name: "finished_at"
+    type: "timestamptz"
+    nullable: true
+    description: "Timestamp when object processing reached a terminal status."
+
+  - name: "created_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when the attempt record was created."
+
+constraints:
+  primary_key:
+    - "attempt_id"
+
+  unique:
+    - ["pipeline_run_id", "bucket", "object_key"]
+
+  checks:
+    - "status in ('started', 'uploaded', 'skipped', 'failed')"
+    - "file_size_bytes is null or file_size_bytes >= 0"
+    - "checksum_sha256 is null or checksum_sha256 matches lowercase SHA256 format"
+    - "finished_at is null or finished_at >= started_at"
+    - "started attempts have no finished_at timestamp"
+    - "terminal attempts have a finished_at timestamp"
+    - "failed attempts contain error_type and error_message"
+    - "uploaded attempts contain file_size_bytes and checksum_sha256"
+    - "resolution matches the terminal status"
+
+relationships:
+  - column: "pipeline_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: false
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "redact"

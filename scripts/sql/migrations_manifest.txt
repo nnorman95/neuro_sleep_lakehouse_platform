@@ -1,0 +1,30 @@
+# Core schemas
+scripts/sql/migrations/001_create_schemas.sql
+
+# Core metadata tables
+scripts/sql/migrations/002_create_ops_pipeline_run.sql
+scripts/sql/migrations/003_create_raw_file_registry.sql
+scripts/sql/migrations/004_create_quality_quarantine_records.sql
+scripts/sql/migrations/005_create_governance_data_contract_registry.sql
+scripts/sql/migrations/006_create_governance_column_classification.sql
+
+# Schema upgrades
+scripts/sql/migrations/013_alter_quality_quarantine_records_payload_pointer.sql
+scripts/sql/migrations/014_fix_governance_data_layer_constraints.sql
+scripts/sql/migrations/015_create_governance_updated_at_triggers.sql
+scripts/sql/migrations/016_create_governance_source_system_registry.sql
+scripts/sql/migrations/020_add_ops_pipeline_run_heartbeat.sql
+scripts/sql/migrations/021_create_ops_file_attempt.sql
+
+# Initial governance seeds
+scripts/sql/seeds/007_seed_data_contract_registry.sql
+scripts/sql/seeds/008_seed_column_classification_raw_file_registry.sql
+scripts/sql/seeds/009_seed_data_contract_registry_ops_pipeline_run.sql
+scripts/sql/seeds/010_seed_column_classification_ops_pipeline_run.sql
+scripts/sql/seeds/011_seed_data_contract_registry_quality_quarantine_records.sql
+scripts/sql/seeds/012_seed_column_classification_quality_quarantine_records.sql
+scripts/sql/seeds/017_seed_source_system_registry_sleep_edf.sql
+scripts/sql/seeds/018_seed_data_contract_registry_governance_source_system_registry.sql
+scripts/sql/seeds/019_seed_column_classification_governance_source_system_registry.sql
+scripts/sql/seeds/022_seed_column_classification_ops_pipeline_run_heartbeat.sql
+scripts/sql/seeds/023_seed_governance_ops_file_attempt.sql
