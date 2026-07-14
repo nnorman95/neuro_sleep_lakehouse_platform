@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import UUID
+
+from botocore.client import BaseClient
 
 from neuro_sleep.identifiers import (
     new_uuid7,
@@ -51,7 +54,7 @@ class SilverRecordingBundle:
     partial_overlap_epoch_count: int
 
     @property
-    def recording_id(self):
+    def recording_id(self) -> UUID:
         return self.recording.recording_id
 
     @property
@@ -128,7 +131,7 @@ def build_recording_model(
     expanded_epochs: (
         ExpandedSleepStageEpochs
     ),
-):
+) -> SilverRecording:
     excluded_epoch_count = (
         expanded_epochs
         .outside_psg_epoch_count
@@ -177,68 +180,57 @@ def build_recording_model(
     )
 
 
-def build_silver_recording(
+def build_silver_recording_from_documents(
     psg_bucket: str,
     psg_object_key: str,
     hypnogram_bucket: str,
     hypnogram_object_key: str,
+    psg_document,
+    hypnogram_document,
+    *,
+    recording_id: UUID | None = None,
 ) -> SilverRecordingBundle:
-    recording_id = new_uuid7()
+    if recording_id is None:
+        recording_id = new_uuid7()
 
-    with open_bronze_edf_pair(
-        psg_bucket=psg_bucket,
-        psg_object_key=psg_object_key,
-        hypnogram_bucket=hypnogram_bucket,
-        hypnogram_object_key=(
-            hypnogram_object_key
+    validate_pair_start_metadata(
+        psg_document=psg_document,
+        hypnogram_document=(
+            hypnogram_document
         ),
-    ) as pair:
-        validate_pair_start_metadata(
-            psg_document=(
-                pair.psg.document
+    )
+
+    psg_metadata = parse_psg_metadata(
+        recording_id=recording_id,
+        psg_document=psg_document,
+    )
+
+    parsed_hypnogram = (
+        parse_hypnogram_annotations(
+            recording_id=recording_id,
+            annotations=(
+                hypnogram_document
+                .annotations
             ),
-            hypnogram_document=(
-                pair.hypnogram.document
+            psg_duration_seconds=(
+                psg_metadata
+                .duration_seconds
             ),
         )
+    )
 
-        psg_metadata = (
-            parse_psg_metadata(
-                recording_id=recording_id,
-                psg_document=(
-                    pair.psg.document
-                ),
-            )
+    expanded_epochs = (
+        expand_sleep_stage_epochs(
+            recording_id=recording_id,
+            intervals=(
+                parsed_hypnogram.intervals
+            ),
+            psg_duration_seconds=(
+                psg_metadata
+                .duration_seconds
+            ),
         )
-
-        parsed_hypnogram = (
-            parse_hypnogram_annotations(
-                recording_id=recording_id,
-                annotations=(
-                    pair.hypnogram
-                    .document
-                    .annotations
-                ),
-                psg_duration_seconds=(
-                    psg_metadata
-                    .duration_seconds
-                ),
-            )
-        )
-
-        expanded_epochs = (
-            expand_sleep_stage_epochs(
-                recording_id=recording_id,
-                intervals=(
-                    parsed_hypnogram
-                    .intervals
-                ),
-                psg_duration_seconds=(
-                    psg_metadata
-                    .duration_seconds
-                ),
-            )
-        )
+    )
 
     recording = build_recording_model(
         psg_bucket=psg_bucket,
@@ -278,3 +270,43 @@ def build_silver_recording(
     )
 
     return bundle
+
+
+def build_silver_recording(
+    psg_bucket: str,
+    psg_object_key: str,
+    hypnogram_bucket: str,
+    hypnogram_object_key: str,
+    *,
+    client: BaseClient | None = None,
+) -> SilverRecordingBundle:
+    with open_bronze_edf_pair(
+        psg_bucket=psg_bucket,
+        psg_object_key=psg_object_key,
+        hypnogram_bucket=hypnogram_bucket,
+        hypnogram_object_key=(
+            hypnogram_object_key
+        ),
+        client=client,
+    ) as pair:
+        return (
+            build_silver_recording_from_documents(
+                psg_bucket=psg_bucket,
+                psg_object_key=(
+                    psg_object_key
+                ),
+                hypnogram_bucket=(
+                    hypnogram_bucket
+                ),
+                hypnogram_object_key=(
+                    hypnogram_object_key
+                ),
+                psg_document=(
+                    pair.psg.document
+                ),
+                hypnogram_document=(
+                    pair.hypnogram
+                    .document
+                ),
+            )
+        )
