@@ -57,6 +57,31 @@ def run_smoke_test() -> None:
             client=client,
         )
 
+        if not result.quality_report.passed:
+            raise RuntimeError(
+                "Valid Silver recording "
+                "failed quality checks"
+            )
+
+        if (
+            result.quality_report.error_count
+            != 0
+        ):
+            raise RuntimeError(
+                "Unexpected Silver quality "
+                "errors"
+            )
+
+        if (
+            result.quality_report
+            .warning_count
+            != 3
+        ):
+            raise RuntimeError(
+                "Unexpected Silver quality "
+                "warning count"
+            )
+
         if len(
             result.metadata_objects
         ) != 4:
@@ -158,6 +183,15 @@ def run_smoke_test() -> None:
                 "metadata"
             )
 
+        print(
+            "silver_quality_gate_passed=true"
+        )
+        print(
+            "silver_quality_error_count=0"
+        )
+        print(
+            "silver_quality_warning_count=3"
+        )
         print(
             "silver_metadata_object_count=4"
         )

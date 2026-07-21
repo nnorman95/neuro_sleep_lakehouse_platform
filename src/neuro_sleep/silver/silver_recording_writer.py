@@ -18,6 +18,10 @@ from neuro_sleep.silver.parquet_tables import (
     recording_to_table,
     signal_chunk_to_table,
 )
+from neuro_sleep.silver.quality_checks import (
+    SilverQualityReport,
+    run_silver_quality_checks,
+)
 from neuro_sleep.silver.recording_builder import (
     SilverRecordingBundle,
     build_silver_recording_from_documents,
@@ -38,6 +42,7 @@ from neuro_sleep.storage.object_storage import (
 @dataclass(frozen=True)
 class SilverRecordingWriteResult:
     bundle: SilverRecordingBundle
+    quality_report: SilverQualityReport
 
     metadata_objects: tuple[
         SilverObjectWriteResult,
@@ -227,6 +232,14 @@ def write_silver_recording(
                 )
             )
 
+            quality_report = (
+                run_silver_quality_checks(
+                    bundle
+                )
+            )
+
+            quality_report.raise_for_errors()
+
             metadata_tables = {
                 "recordings": (
                     recording_to_table(
@@ -356,6 +369,7 @@ def write_silver_recording(
 
         return SilverRecordingWriteResult(
             bundle=bundle,
+            quality_report=quality_report,
             metadata_objects=tuple(
                 metadata_results
             ),
