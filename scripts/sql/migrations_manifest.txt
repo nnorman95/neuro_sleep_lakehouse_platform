@@ -28,3 +28,6 @@ scripts/sql/seeds/018_seed_data_contract_registry_governance_source_system_regis
 scripts/sql/seeds/019_seed_column_classification_governance_source_system_registry.sql
 scripts/sql/seeds/022_seed_column_classification_ops_pipeline_run_heartbeat.sql
 scripts/sql/seeds/023_seed_governance_ops_file_attempt.sql
+
+# Silver staging tables
+scripts/sql/migrations/024_create_staging_silver_tables.sql
