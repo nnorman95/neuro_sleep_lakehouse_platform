@@ -1,48 +1,29 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
+export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
-echo "Running NeuroSleep smoke tests..."
+current=0
+total=10
+
+run_test() {
+    local title="$1"
+    local module="$2"
+    current=$((current + 1))
+    echo "${current}/${total} ${title}"
+    python -m "${module}"
+    echo
+}
+
+echo "Running NeuroSleep core smoke tests..."
 echo
-
-echo "1/10 Check Python configuration"
-PYTHONPATH=src python -m neuro_sleep.config
-echo
-
-echo "2/10 Check PostgreSQL connection"
-PYTHONPATH=src python -m neuro_sleep.db.postgres
-echo
-
-echo "3/10 Check MinIO object storage"
-PYTHONPATH=src python -m neuro_sleep.storage.object_storage
-echo
-
-echo "4/10 Check ops.pipeline_run"
-PYTHONPATH=src python -m neuro_sleep.ops.pipeline_run
-echo
-
-echo "5/10 Check raw.file_registry"
-PYTHONPATH=src python -m neuro_sleep.raw.file_registry
-echo
-
-echo "6/10 Check quality.quarantine_records"
-PYTHONPATH=src python -m neuro_sleep.quality.quarantine
-echo
-
-echo "7/10 Check quarantine payload pointer"
-PYTHONPATH=src python -m neuro_sleep.quality.quarantine_payload_smoke
-echo
-
-echo "8/10 Check reusable bronze writer"
-PYTHONPATH=src python -m neuro_sleep.ingestion.bronze_writer_smoke
-echo
-
-echo "9/10 Check Sleep-EDF checksum manifest"
-PYTHONPATH=src python -m neuro_sleep.sources.sleep_edf_manifest_smoke
-echo
-
-echo "10/10 Check Sleep-EDF open source configuration"
-PYTHONPATH=src python -m neuro_sleep.sources.sleep_edf
-echo
-
-echo "All smoke tests completed."
+run_test "Check Python configuration" "neuro_sleep.config"
+run_test "Check PostgreSQL connection" "neuro_sleep.db.postgres"
+run_test "Check MinIO object storage" "neuro_sleep.storage.object_storage"
+run_test "Check ops.pipeline_run" "neuro_sleep.ops.pipeline_run"
+run_test "Check raw.file_registry" "neuro_sleep.raw.file_registry"
+run_test "Check quality.quarantine_records" "neuro_sleep.quality.quarantine"
+run_test "Check quarantine payload pointer" "neuro_sleep.quality.quarantine_payload_smoke"
+run_test "Check production Bronze file writer" "neuro_sleep.ingestion.bronze_file_writer_success_smoke"
+run_test "Check Sleep-EDF checksum manifest" "neuro_sleep.sources.sleep_edf_manifest_smoke"
+run_test "Check Sleep-EDF source configuration" "neuro_sleep.sources.sleep_edf"
+echo "All core smoke tests completed."
