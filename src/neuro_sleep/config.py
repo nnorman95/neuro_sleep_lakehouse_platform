@@ -70,8 +70,6 @@ class Settings:
     minio_secret_key: str = field(repr=False)
 
     data_profile: str
-    max_rows_per_table: int
-
     active_source: str
 
     sleep_edf_version: str
@@ -93,41 +91,22 @@ class Settings:
             "minio_access_key": "***",
             "minio_secret_key": "***",
             "data_profile": self.data_profile,
-            "max_rows_per_table": self.max_rows_per_table,
             "active_source": self.active_source,
             "sleep_edf_version": self.sleep_edf_version,
-            "sleep_edf_max_recordings": (
-                self.sleep_edf_max_recordings
-            ),
-            "sleep_edf_include_cassette": (
-                self.sleep_edf_include_cassette
-            ),
-            "sleep_edf_include_telemetry": (
-                self.sleep_edf_include_telemetry
-            ),
-            "sleep_edf_include_metadata": (
-                self.sleep_edf_include_metadata
-            ),
+            "sleep_edf_max_recordings": self.sleep_edf_max_recordings,
+            "sleep_edf_include_cassette": self.sleep_edf_include_cassette,
+            "sleep_edf_include_telemetry": self.sleep_edf_include_telemetry,
+            "sleep_edf_include_metadata": self.sleep_edf_include_metadata,
         }
 
 
 def get_settings() -> Settings:
-    data_profile = (
-        os.getenv("DATA_PROFILE", "sample")
-        .strip()
-        .lower()
-    )
+    data_profile = os.getenv("DATA_PROFILE", "sample").strip().lower()
 
     if data_profile not in {"sample", "full"}:
-        raise ValueError(
-            "DATA_PROFILE must be 'sample' or 'full'"
-        )
+        raise ValueError("DATA_PROFILE must be 'sample' or 'full'")
 
-    active_source = (
-        os.getenv("ACTIVE_SOURCE", "sleep_edf")
-        .strip()
-        .lower()
-    )
+    active_source = os.getenv("ACTIVE_SOURCE", "sleep_edf").strip().lower()
 
     return Settings(
         project_name=os.getenv(
@@ -135,60 +114,26 @@ def get_settings() -> Settings:
             "neuro_sleep_lakehouse_platform",
         ),
         env=os.getenv("ENV", "local"),
-        postgres_host=os.getenv(
-            "POSTGRES_HOST",
-            "localhost",
-        ),
-        postgres_port=_get_int_env(
-            "POSTGRES_PORT",
-            5432,
-        ),
-        postgres_db=os.getenv(
-            "POSTGRES_DB",
-            "neuro_sleep",
-        ),
-        postgres_user=os.getenv(
-            "POSTGRES_USER",
-            "neuro_sleep",
-        ),
-        postgres_password=_get_required_env(
-            "POSTGRES_PASSWORD"
-        ),
-        minio_endpoint=os.getenv(
-            "MINIO_ENDPOINT",
-            "http://localhost:9000",
-        ),
-        minio_access_key=_get_required_env(
-            "MINIO_ACCESS_KEY"
-        ),
-        minio_secret_key=_get_required_env(
-            "MINIO_SECRET_KEY"
-        ),
+        postgres_host=os.getenv("POSTGRES_HOST", "localhost"),
+        postgres_port=_get_int_env("POSTGRES_PORT", 5432),
+        postgres_db=os.getenv("POSTGRES_DB", "neuro_sleep"),
+        postgres_user=os.getenv("POSTGRES_USER", "neuro_sleep"),
+        postgres_password=_get_required_env("POSTGRES_PASSWORD"),
+        minio_endpoint=os.getenv("MINIO_ENDPOINT", "http://localhost:9000"),
+        minio_access_key=_get_required_env("MINIO_ACCESS_KEY"),
+        minio_secret_key=_get_required_env("MINIO_SECRET_KEY"),
         data_profile=data_profile,
-        max_rows_per_table=_get_int_env(
-            "MAX_ROWS_PER_TABLE",
-            100000,
-        ),
         active_source=active_source,
-        sleep_edf_version=os.getenv(
-            "SLEEP_EDF_VERSION",
-            "1.0.0",
-        ).strip(),
-        sleep_edf_max_recordings=_get_int_env(
-            "SLEEP_EDF_MAX_RECORDINGS",
-            4,
-        ),
+        sleep_edf_version=os.getenv("SLEEP_EDF_VERSION", "1.0.0").strip(),
+        sleep_edf_max_recordings=_get_int_env("SLEEP_EDF_MAX_RECORDINGS", 4),
         sleep_edf_include_cassette=_get_bool_env(
-            "SLEEP_EDF_INCLUDE_CASSETTE",
-            True,
+            "SLEEP_EDF_INCLUDE_CASSETTE", True
         ),
         sleep_edf_include_telemetry=_get_bool_env(
-            "SLEEP_EDF_INCLUDE_TELEMETRY",
-            True,
+            "SLEEP_EDF_INCLUDE_TELEMETRY", True
         ),
         sleep_edf_include_metadata=_get_bool_env(
-            "SLEEP_EDF_INCLUDE_METADATA",
-            True,
+            "SLEEP_EDF_INCLUDE_METADATA", True
         ),
     )
 

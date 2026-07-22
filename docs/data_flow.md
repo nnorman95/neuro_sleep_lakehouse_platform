@@ -1,69 +1,44 @@
 # Data Flow
 
-## Extract
+## Extract and Bronze
 
 ```text
-Sleep-EDF Database Expanded
-         |
-         v
-SHA256SUMS.txt
-         |
-         v
-manifest parsing
-         |
-         v
-sample/full file selection
-         |
-         v
-streaming HTTP download
+Sleep-EDF / PhysioNet
+  -> RECORDS + SHA256SUMS.txt
+  -> manifest parsing and sample/full selection
+  -> streaming HTTP download
+  -> official SHA-256 verification
+  -> MinIO Bronze
+  -> raw.file_registry + ops.pipeline_run + ops.file_attempt
 ```
 
-## Bronze load
+Existing verified objects are skipped or recovered instead of blindly
+downloaded again. Bronze reconciliation compares MinIO and PostgreSQL registry
+state.
+
+## Bronze to Silver
 
 ```text
-downloaded source file
-         |
-         v
-SHA-256 verification
-         |
-         v
-MinIO bronze object
-         |
-         v
-raw.file_registry
+PSG EDF + Hypnogram EDF
+  -> edfio parsing
+  -> recording/channel/interval/epoch/signal models
+  -> Silver quality gate
+  -> PyArrow tables
+  -> Parquet + ZSTD
+  -> MinIO Silver
+  -> _SUCCESS.json + reconciliation
 ```
 
-## Operational metadata
+Silver preserves source Stage 3 and Stage 4 separately as `N3` and `N4`.
 
-Each pipeline execution is written to:
+## PostgreSQL analytical path
 
 ```text
-ops.pipeline_run
+MinIO Silver metadata
+  -> staging.silver_* DDL exists
+  -> production loader pending identity/lineage stabilization
+  -> dbt warehouse/marts later
 ```
 
-Each source file is written to:
-
-```text
-raw.file_registry
-```
-
-Invalid files or records are written to:
-
-```text
-quality.quarantine_records
-```
-
-Large quarantine payloads are stored in MinIO, while PostgreSQL
-stores the pointer and checksum.
-
-## Profiles
-
-```text
-DATA_PROFILE=sample
-    -> apply user-configured limits
-
-DATA_PROFILE=full
-    -> select all discovered source files
-```
-
-The real downloader is the next implementation phase.
+High-volume signal samples remain in MinIO rather than being loaded row-by-row
+into PostgreSQL.

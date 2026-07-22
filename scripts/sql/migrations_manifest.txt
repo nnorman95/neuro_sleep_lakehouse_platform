@@ -31,3 +31,4 @@ scripts/sql/seeds/023_seed_governance_ops_file_attempt.sql
 
 # Silver staging tables
 scripts/sql/migrations/024_create_staging_silver_tables.sql
+scripts/sql/seeds/030_seed_governance_staging_silver_tables.sql

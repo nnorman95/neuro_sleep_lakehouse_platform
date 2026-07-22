@@ -28,9 +28,9 @@ VALUES (
     true,
     true,
     false,
-    'open',
-    'planned',
-    'Open-access polysomnography recordings, sleep-stage hypnograms, and descriptive metadata.'
+    'restricted',
+    'active',
+    'Open-access anonymized polysomnography source. Patient-level Bronze and Silver data remain restricted inside the platform.'
 )
 ON CONFLICT (source_system, dataset_version)
 DO UPDATE SET

@@ -1,37 +1,33 @@
 # Access Model
 
-## Sleep-EDF source access
+## External source access
 
-Sleep-EDF Database Expanded is configured as an open-access source.
+Sleep-EDF Database Expanded is an open-access PhysioNet source.
 
 ```text
 source_system = physionet_sleep_edf
 access_model = open
 credential_required = false
-access_policy = open
 ```
 
-The extractor does not require a PhysioNet username or password.
+`access_model` describes how the upstream dataset is obtained.
 
-Open access does not remove the requirement to follow the dataset
-license and citation conditions.
+## Internal platform access
 
-## Repository access
+Open source distribution does not mean patient-level sleep data should be
+unrestricted inside the platform.
 
-The public repository contains:
+```text
+patient-level Bronze/Silver data = restricted
+operational metadata = team_only
+public repository = code/config/docs only
+```
 
-- source code;
-- SQL migrations and seeds;
-- data contracts;
-- configuration examples;
-- synthetic smoke-test payloads;
-- documentation.
+The source registry therefore uses both:
 
-The repository does not contain:
+```text
+access_model = open
+access_policy = restricted
+```
 
-- real EDF recordings;
-- generated local data;
-- database passwords;
-- MinIO secrets;
-- local `.env`;
-- local virtual environments.
+These fields intentionally describe different concepts.
