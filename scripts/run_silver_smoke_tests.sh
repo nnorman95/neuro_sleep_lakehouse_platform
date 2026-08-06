@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=23
+total=24
 
 
 run_test() {
@@ -54,6 +54,10 @@ run_test \
 run_test \
     "Check subject Parquet datasets" \
     "neuro_sleep.silver.subject_parquet_smoke"
+
+run_test \
+    "Check tracked subject metadata pipeline" \
+    "neuro_sleep.silver.subject_metadata_pipeline_smoke"
 
 run_test \
     "Check recording bundle builder" \
