@@ -18,6 +18,25 @@ QualitySeverity = Literal[
 ]
 
 
+class SilverQualityError(ValueError):
+    def __init__(
+        self,
+        report: "SilverQualityReport",
+    ) -> None:
+        self.report = report
+
+        details = "; ".join(
+            f"{issue.code}: {issue.message}"
+            for issue in report.issues
+            if issue.severity == "error"
+        )
+
+        super().__init__(
+            "Silver quality checks failed: "
+            f"{details}"
+        )
+
+
 @dataclass(frozen=True)
 class QualityIssue:
     code: str
@@ -57,14 +76,8 @@ class SilverQualityReport:
         if not errors:
             return
 
-        details = "; ".join(
-            f"{issue.code}: {issue.message}"
-            for issue in errors
-        )
-
-        raise ValueError(
-            "Silver quality checks failed: "
-            f"{details}"
+        raise SilverQualityError(
+            report=self
         )
 
 

@@ -16,6 +16,9 @@ from neuro_sleep.silver.reconciliation import (
 from neuro_sleep.silver.signal_extractor import (
     DEFAULT_CHUNK_DURATION_SECONDS,
 )
+from neuro_sleep.silver.silver_recording_writer import (
+    QualityReportHandler,
+)
 from neuro_sleep.storage.object_storage import (
     get_object_storage_client,
 )
@@ -94,6 +97,9 @@ def run_silver_pipeline(
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
     verify_payload_checksums: bool = True,
+    quality_report_handler: (
+        QualityReportHandler | None
+    ) = None,
     client: BaseClient | None = None,
 ) -> SilverPipelineResult:
     owns_client = client is None
@@ -122,6 +128,9 @@ def run_silver_pipeline(
                 ),
                 signal_stop_seconds=(
                     signal_stop_seconds
+                ),
+                quality_report_handler=(
+                    quality_report_handler
                 ),
                 client=client,
             )
