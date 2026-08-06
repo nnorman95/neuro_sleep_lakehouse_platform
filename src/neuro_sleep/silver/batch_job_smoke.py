@@ -1,3 +1,5 @@
+from contextlib import redirect_stdout
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -88,6 +90,8 @@ def run_continue_case() -> None:
         )
     )
 
+    progress_output = StringIO()
+
     with (
         patch.object(
             batch_job,
@@ -107,12 +111,39 @@ def run_continue_case() -> None:
             batch_job,
             "emit_exception",
         ),
+        redirect_stdout(progress_output),
     ):
         result = batch_job.run_silver_batch(
             settings=get_settings(),
             continue_on_error=True,
             signal_stop_seconds=60.0,
         )
+
+    rendered_progress = (
+        progress_output.getvalue()
+    )
+
+    required_progress_fragments = (
+        "[0/3] | 0%",
+        "[1/3] | 33%",
+        "[2/3] | 67%",
+        "[3/3] | 100%",
+        "AA0001A | written",
+        "AA0002A | skipped",
+        "AA0003A | failed",
+        "rows=100",
+        "rows=200",
+        "elapsed=",
+    )
+
+    for fragment in (
+        required_progress_fragments
+    ):
+        if fragment not in rendered_progress:
+            raise RuntimeError(
+                "Missing batch progress "
+                f"fragment: {fragment}"
+            )
 
     if result.recording_count != 3:
         raise RuntimeError(
@@ -186,6 +217,15 @@ def run_continue_case() -> None:
     )
     print(
         "batch_failure_details_preserved=true"
+    )
+    print(
+        "batch_progress_percentages=true"
+    )
+    print(
+        "batch_progress_recording_status=true"
+    )
+    print(
+        "batch_progress_rows_and_elapsed=true"
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Literal
 from uuid import UUID
 
@@ -97,6 +98,57 @@ class SilverBatchResult:
         return self.failed_count == 0
 
 
+
+def format_batch_progress(
+    *,
+    completed_count: int,
+    recording_count: int,
+    recording_key: str,
+    state: str,
+    elapsed_seconds: float | None = None,
+    row_count: int | None = None,
+) -> str:
+    if recording_count <= 0:
+        raise ValueError(
+            "recording_count must be positive"
+        )
+
+    if not (
+        0
+        <= completed_count
+        <= recording_count
+    ):
+        raise ValueError(
+            "completed_count is outside "
+            "the batch range"
+        )
+
+    percent = round(
+        completed_count
+        / recording_count
+        * 100
+    )
+
+    parts = [
+        "Silver batch",
+        f"[{completed_count}/{recording_count}]",
+        f"{percent}%",
+        recording_key,
+        state,
+    ]
+
+    if row_count is not None:
+        parts.append(
+            f"rows={row_count:,}"
+        )
+
+    if elapsed_seconds is not None:
+        parts.append(
+            f"elapsed={elapsed_seconds:.1f}s"
+        )
+
+    return " | ".join(parts)
+
 def run_silver_batch(
     *,
     settings: Settings | None = None,
@@ -115,6 +167,16 @@ def run_silver_batch(
         settings=settings
     )
 
+    print(
+        format_batch_progress(
+            completed_count=0,
+            recording_count=len(pairs),
+            recording_key="all-recordings",
+            state="started",
+        ),
+        flush=True,
+    )
+
     emit_event(
         event="silver_batch_started",
         recording_count=len(pairs),
@@ -130,6 +192,20 @@ def run_silver_batch(
         pairs,
         start=1,
     ):
+        item_started_at = perf_counter()
+
+        print(
+            format_batch_progress(
+                completed_count=index - 1,
+                recording_count=len(pairs),
+                recording_key=(
+                    pair.recording_key
+                ),
+                state="processing",
+            ),
+            flush=True,
+        )
+
         emit_event(
             event="silver_batch_item_started",
             item_index=index,
@@ -206,6 +282,22 @@ def run_silver_batch(
                 ),
             )
 
+            print(
+                format_batch_progress(
+                    completed_count=index,
+                    recording_count=len(pairs),
+                    recording_key=(
+                        pair.recording_key
+                    ),
+                    state="failed",
+                    elapsed_seconds=(
+                        perf_counter()
+                        - item_started_at
+                    ),
+                ),
+                flush=True,
+            )
+
             if not continue_on_error:
                 raise
 
@@ -240,6 +332,23 @@ def run_silver_batch(
 
         items.append(item)
 
+        print(
+            format_batch_progress(
+                completed_count=index,
+                recording_count=len(pairs),
+                recording_key=(
+                    pair.recording_key
+                ),
+                state=item.status,
+                row_count=item.row_count,
+                elapsed_seconds=(
+                    perf_counter()
+                    - item_started_at
+                ),
+            ),
+            flush=True,
+        )
+
         emit_event(
             event="silver_batch_item_completed",
             item_index=index,
@@ -261,6 +370,27 @@ def run_silver_batch(
 
     result = SilverBatchResult(
         items=tuple(items)
+    )
+
+    print(
+        format_batch_progress(
+            completed_count=(
+                result.recording_count
+            ),
+            recording_count=(
+                result.recording_count
+            ),
+            recording_key="all-recordings",
+            state=(
+                "completed"
+                if result.passed
+                else "completed-with-errors"
+            ),
+            row_count=(
+                result.total_row_count
+            ),
+        ),
+        flush=True,
     )
 
     emit_event(
