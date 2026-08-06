@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=19
+total=20
 
 
 run_test() {
@@ -74,6 +74,10 @@ run_test \
 run_test \
     "Check Silver quality gate" \
     "neuro_sleep.silver.quality_checks_smoke"
+
+run_test \
+    "Check Silver batch discovery" \
+    "neuro_sleep.silver.batch_discovery_smoke"
 
 run_test \
     "Check Silver source lineage" \
