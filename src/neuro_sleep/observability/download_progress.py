@@ -1,5 +1,4 @@
 import sys
-from datetime import datetime
 from pathlib import PurePosixPath
 from time import perf_counter
 from typing import TextIO
@@ -8,6 +7,7 @@ from neuro_sleep.observability.structured_logging import (
     emit_event,
     emit_exception,
     format_byte_count,
+    format_console_timestamp,
     resolve_log_format,
 )
 
@@ -158,8 +158,8 @@ class DownloadProgressReporter:
         self,
         completed: bool = False,
     ) -> str:
-        timestamp = datetime.now().strftime(
-            "%H:%M:%S"
+        timestamp = (
+            format_console_timestamp()
         )
 
         speed = self._calculate_speed()
@@ -419,8 +419,8 @@ class DownloadProgressReporter:
 
             self.line_is_active = False
 
-        timestamp = datetime.now().strftime(
-            "%H:%M:%S"
+        timestamp = (
+            format_console_timestamp()
         )
 
         print(
