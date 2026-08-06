@@ -7,3 +7,4 @@ uuid6==2025.0.1
 edfio==0.4.13
 numpy>=1.22
 pyarrow==25.0.0
+xlrd==2.0.2
