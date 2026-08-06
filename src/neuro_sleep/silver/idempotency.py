@@ -60,6 +60,9 @@ class SilverIdempotentWriteResult:
         | None
     )
 
+    recovered_partial_output: bool = False
+    recovered_object_count: int = 0
+
     @property
     def skipped(self) -> bool:
         return self.status == "skipped"
@@ -245,6 +248,70 @@ def delete_prefix_objects(
                 f"{item.object_key}"
             ),
         )
+
+
+def recover_partial_output_prefix(
+    bucket: str,
+    output_prefix: str,
+    client: BaseClient,
+) -> int:
+    existing_objects = list_prefix_objects(
+        bucket=bucket,
+        output_prefix=output_prefix,
+        client=client,
+    )
+
+    if not existing_objects:
+        return 0
+
+    success_object_key = (
+        build_success_object_key(
+            output_prefix
+        )
+    )
+
+    existing_keys = {
+        item.object_key
+        for item in existing_objects
+    }
+
+    if success_object_key in existing_keys:
+        raise PartialSilverOutputError(
+            "Automatic recovery refuses to "
+            "delete a Silver prefix that "
+            f"contains {SUCCESS_OBJECT_NAME}: "
+            f"{output_prefix}"
+        )
+
+    recovered_object_count = len(
+        existing_objects
+    )
+
+    delete_prefix_objects(
+        bucket=bucket,
+        output_prefix=output_prefix,
+        client=client,
+    )
+
+    remaining_objects = list_prefix_objects(
+        bucket=bucket,
+        output_prefix=output_prefix,
+        client=client,
+    )
+
+    if remaining_objects:
+        remaining_keys = ", ".join(
+            item.object_key
+            for item in remaining_objects
+        )
+
+        raise PartialSilverOutputError(
+            "Partial Silver output recovery "
+            "did not remove every object: "
+            f"{remaining_keys}"
+        )
+
+    return recovered_object_count
 
 
 def build_success_manifest(
@@ -579,6 +646,9 @@ def write_silver_recording_idempotent(
     if client is None:
         client = get_object_storage_client()
 
+    recovered_partial_output = False
+    recovered_object_count = 0
+
     try:
         existing_objects = (
             list_prefix_objects(
@@ -658,15 +728,26 @@ def write_silver_recording_idempotent(
                         recording_id
                     ),
                     write_result=None,
+                    recovered_partial_output=(
+                        False
+                    ),
+                    recovered_object_count=0,
                 )
             )
 
         if existing_objects:
-            raise PartialSilverOutputError(
-                "Silver output prefix contains "
-                "objects but has no "
-                f"{SUCCESS_OBJECT_NAME}: "
-                f"{output_prefix}"
+            recovered_object_count = (
+                recover_partial_output_prefix(
+                    bucket=silver_bucket,
+                    output_prefix=(
+                        output_prefix
+                    ),
+                    client=client,
+                )
+            )
+
+            recovered_partial_output = (
+                recovered_object_count > 0
             )
 
         write_result = (
@@ -766,6 +847,12 @@ def write_silver_recording_idempotent(
                 .recording_id
             ),
             write_result=write_result,
+            recovered_partial_output=(
+                recovered_partial_output
+            ),
+            recovered_object_count=(
+                recovered_object_count
+            ),
         )
 
     finally:

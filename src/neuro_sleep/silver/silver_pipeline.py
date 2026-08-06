@@ -61,6 +61,24 @@ class SilverPipelineResult:
             .expected_row_count
         )
 
+    @property
+    def recovered_partial_output(
+        self,
+    ) -> bool:
+        return (
+            self.write_result
+            .recovered_partial_output
+        )
+
+    @property
+    def recovered_object_count(
+        self,
+    ) -> int:
+        return (
+            self.write_result
+            .recovered_object_count
+        )
+
 
 def run_silver_pipeline(
     psg_bucket: str,
