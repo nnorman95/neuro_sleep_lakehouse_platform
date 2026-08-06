@@ -1,6 +1,6 @@
 # Quality Rules
 
-This document describes the first planned data quality rules for the NeuroSleep Lakehouse Platform.
+This document describes implemented and planned data quality rules for the NeuroSleep Lakehouse Platform.
 
 The goal is simple: bad data should never disappear silently. Every rejected, suspicious, duplicated, late, or contract-breaking record should have a visible reason and a defined handling strategy.
 
@@ -91,12 +91,13 @@ Important fields must not be null.
 | raw.file_registry | source_system | Not null |
 | raw.file_registry | object_key | Not null |
 | raw.file_registry | checksum_sha256 | Not null |
-| silver_subjects | subject_id | Not null and unique |
-| silver_recordings | recording_id | Not null and unique |
-| silver_recordings | subject_id | Not null |
-| silver_sleep_epochs | epoch_id | Not null and unique |
-| silver_sleep_epochs | recording_id | Not null |
-| silver_sleep_epochs | sleep_stage | Not null and accepted value |
+| Silver recordings | recording_id | Not null and unique within the dataset |
+| Silver channels | channel_id | Not null and unique |
+| Silver channels | recording_id | Must reference the recording |
+| Silver sleep-stage intervals | interval_id | Not null and unique |
+| Silver sleep-stage epochs | epoch_id | Not null and unique |
+| Silver sleep-stage epochs | recording_id | Must reference the recording |
+| Silver sleep-stage epochs | normalized_stage | Not null and accepted source-preserving value |
 | quality.quarantine_records | error_code | Not null |
 | quality.quarantine_records | raw_payload | Not null when available |
 
@@ -117,7 +118,22 @@ If a required parent record is missing, the child record should not be promoted 
 
 ## 8. Sleep Stage Rules
 
-Allowed standardized sleep stages:
+Implemented source-preserving Silver sleep stages:
+
+```text
+W
+N1
+N2
+N3
+N4
+REM
+UNKNOWN
+MOVEMENT
+```
+
+Silver deliberately preserves historical source Stage 3 and Stage 4 separately.
+
+Planned analytical standardized stages:
 
 ```text
 W
@@ -127,6 +143,10 @@ N3
 REM
 UNKNOWN
 ```
+
+The analytical mapping may combine Silver `N3` and `N4` into analytical `N3`.
+`UNKNOWN` and `MOVEMENT` must remain explicit and must not silently become
+ordinary sleep stages.
 
 Possible mapping examples:
 
@@ -328,15 +348,18 @@ pipeline_run_id
 status
 ```
 
-Possible statuses:
+Physical PostgreSQL statuses:
 
 ```text
 open
 reviewed
-fixed
+resolved
 ignored
-reprocessed
 ```
+
+Any future workflow states such as reprocessing should be represented through
+separate operational history or an explicit schema change, not documented as
+valid values unless the database constraint supports them.
 
 ## 16. Quality Check Results Structure
 
@@ -455,7 +478,15 @@ Avoid:
 Current status:
 
 ```text
-Initial quality rules design.
+Bronze integrity and reconciliation implemented
+Quarantine metadata and external payload pointers implemented
+Silver structural quality gate implemented
+Silver warning/error checks implemented
+Silver _SUCCESS publication blocked on quality errors
+Durable quality.quality_check_results table not yet implemented
+Great Expectations integration not yet implemented
+Broken-data scenario suite remains a later phase
 ```
 
-This document should be refined after the exact dataset sample is selected and the first raw files are inspected.
+Quality documentation must remain aligned with physical database constraints and
+implemented Silver schemas.

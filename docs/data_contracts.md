@@ -1,51 +1,31 @@
 # Data Contracts
 
-The platform currently registers contracts for:
+The platform registers YAML contracts for important PostgreSQL tables in
+`governance.data_contract_registry`.
+
+Current contract files:
 
 ```text
-raw.file_registry
-ops.pipeline_run
-quality.quarantine_records
-governance.source_system_registry
+contracts/raw_file_registry.yml
+contracts/ops_pipeline_run.yml
+contracts/ops_file_attempt.yml
+contracts/quality_quarantine_records.yml
+contracts/governance_source_system_registry.yml
+contracts/staging_silver_recordings.yml
+contracts/staging_silver_channels.yml
+contracts/staging_silver_sleep_stage_intervals.yml
+contracts/staging_silver_sleep_stage_epochs.yml
 ```
 
-## Active source identifier
+The staging contracts describe the current migration-024 landing schema and
+will be versioned when the staging lineage model changes.
+
+Silver Parquet schemas are explicitly defined in:
 
 ```text
-physionet_sleep_edf
+src/neuro_sleep/silver/parquet_schemas.py
 ```
 
-## Raw file contract
-
-Every successfully ingested source object should record:
-
-- source system;
-- original source URL;
-- MinIO bucket;
-- MinIO object key;
-- file name;
-- file type;
-- file size;
-- SHA-256 checksum;
-- ingestion run identifier;
-- ingestion status;
-- ingestion timestamp.
-
-## Source registry contract
-
-The Sleep-EDF source registry row describes:
-
-```text
-dataset_name = Sleep-EDF Database Expanded
-dataset_version = 1.0.0
-access_model = open
-credential_required = false
-access_policy = open
-```
-
-## Sensitive-data handling
-
-Sleep recordings remain patient-level health-related data even
-though the source files are openly distributed and anonymized.
-
-Raw files are stored locally in MinIO and are not committed to Git.
+Sleep recordings and sleep-stage data are patient-level health-related data.
+External source access is open, while internal patient-level data access is
+restricted. Real Bronze/Silver data remains local and is never committed.

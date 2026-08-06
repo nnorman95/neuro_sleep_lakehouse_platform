@@ -53,6 +53,17 @@ TASK_NAME = "download_verify_and_load_bronze"
 HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 
+def format_failure_message(
+    error: BaseException,
+) -> str:
+    message = str(error).strip()
+
+    if message:
+        return message
+
+    return type(error).__name__
+
+
 def apply_file_task_result(
     result: SleepEdfFileTaskResult,
     uploaded_count: int,
@@ -221,7 +232,7 @@ def run_tracked_file_task(
 
         return result
 
-    except Exception as error:
+    except BaseException as error:
         try:
             finish_file_attempt_failed(
                 attempt_id=attempt_id,
@@ -243,7 +254,9 @@ def run_tracked_file_task(
                     type(error).__name__
                 ),
                 original_error_message=(
-                    str(error)
+                    format_failure_message(
+                        error
+                    )
                 ),
             )
 
@@ -462,6 +475,7 @@ def run_sleep_edf_extract_locked(
             heartbeat=heartbeat,
             run_id=run_id,
         )
+        heartbeat = None
 
         finish_pipeline_run_success(
             run_id=run_id,
@@ -485,7 +499,13 @@ def run_sleep_edf_extract_locked(
             progress_percent=100.0,
         )
 
-    except Exception as error:
+    except BaseException as error:
+        stop_pipeline_heartbeat_safely(
+            heartbeat=heartbeat,
+            run_id=run_id,
+        )
+        heartbeat = None
+
         emit_exception(
             event="pipeline_failed",
             error=error,
@@ -503,7 +523,11 @@ def run_sleep_edf_extract_locked(
         try:
             finish_pipeline_run_failed(
                 run_id=run_id,
-                error_message=str(error),
+                error_message=(
+                    format_failure_message(
+                        error
+                    )
+                ),
                 rows_read=0,
                 rows_written=0,
                 files_processed=processed_count,
@@ -521,16 +545,21 @@ def run_sleep_edf_extract_locked(
                 original_error_type=(
                     type(error).__name__
                 ),
-                original_error_message=str(error),
+                original_error_message=(
+                    format_failure_message(
+                        error
+                    )
+                ),
             )
 
         raise
 
     finally:
-        stop_pipeline_heartbeat_safely(
-            heartbeat=heartbeat,
-            run_id=run_id,
-        )
+        if heartbeat is not None:
+            stop_pipeline_heartbeat_safely(
+                heartbeat=heartbeat,
+                run_id=run_id,
+            )
 
         cleanup_error_count = 0
 

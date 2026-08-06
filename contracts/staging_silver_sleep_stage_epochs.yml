@@ -1,0 +1,28 @@
+version: "v1"
+contract_name: "staging_silver_sleep_stage_epochs_contract"
+table:
+  schema: "staging"
+  name: "silver_sleep_stage_epochs"
+  layer: "staging"
+owner_role: "data_engineer"
+description: "Current landing contract for in-range derived Silver sleep-stage epochs."
+columns:
+  - {name: "epoch_id", type: "uuid", nullable: false}
+  - {name: "recording_id", type: "uuid", nullable: false}
+  - {name: "source_interval_id", type: "uuid", nullable: false}
+  - {name: "source_annotation_index", type: "integer", nullable: false}
+  - {name: "epoch_number", type: "integer", nullable: false}
+  - {name: "start_seconds", type: "double precision", nullable: false}
+  - {name: "duration_seconds", type: "double precision", nullable: false}
+  - {name: "end_seconds", type: "double precision", nullable: false}
+  - {name: "source_label", type: "text", nullable: false}
+  - {name: "normalized_stage", type: "text", nullable: false}
+constraints:
+  primary_key: ["epoch_id"]
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "none"

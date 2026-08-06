@@ -7,6 +7,7 @@ from neuro_sleep.identifiers import new_uuid7
 from neuro_sleep.observability.structured_logging import (
     emit_event,
     emit_exception,
+    format_console_timestamp,
 )
 
 
@@ -66,6 +67,34 @@ def run_smoke_test() -> None:
     print("structured_json_is_valid=true")
     print("uuid_normalization=true")
     print("utc_timestamp=true")
+
+    utc_console_timestamp = (
+        format_console_timestamp(
+            "2026-08-06T18:30:00+00:00"
+        )
+    )
+
+    offset_console_timestamp = (
+        format_console_timestamp(
+            "2026-08-06T22:30:00+04:00"
+        )
+    )
+
+    if (
+        utc_console_timestamp
+        != "18:30:00"
+        or offset_console_timestamp
+        != "18:30:00"
+    ):
+        raise RuntimeError(
+            "Console timestamp is not "
+            "normalized to UTC"
+        )
+
+    print(
+        "console_timestamp_utc_normalized="
+        "true"
+    )
 
     pretty_output = StringIO()
 

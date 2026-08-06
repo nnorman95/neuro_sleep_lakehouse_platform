@@ -39,6 +39,32 @@ DEFAULT_LOG_FORMAT = "pretty"
 DEFAULT_LOG_LEVEL = "INFO"
 
 
+def format_console_timestamp(
+    value: datetime | str | None = None,
+) -> str:
+    if value is None:
+        timestamp = datetime.now(
+            timezone.utc
+        )
+
+    elif isinstance(value, str):
+        timestamp = datetime.fromisoformat(
+            value
+        )
+
+    else:
+        timestamp = value
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(
+            tzinfo=timezone.utc
+        )
+
+    return timestamp.astimezone(
+        timezone.utc
+    ).strftime("%H:%M:%S")
+
+
 def normalize_log_value(
     value: Any,
 ) -> Any:
@@ -257,9 +283,9 @@ def format_byte_count(
 def format_pretty_event(
     payload: dict[str, Any],
 ) -> str | None:
-    timestamp = datetime.fromisoformat(
+    timestamp = format_console_timestamp(
         str(payload["timestamp_utc"])
-    ).strftime("%H:%M:%S")
+    )
 
     event = str(payload["event"])
 

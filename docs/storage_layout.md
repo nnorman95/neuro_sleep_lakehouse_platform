@@ -1,6 +1,6 @@
 # Storage Layout
 
-## MinIO buckets
+## Buckets
 
 ```text
 bronze
@@ -10,44 +10,26 @@ quarantine
 logs
 ```
 
-## Sleep-EDF Bronze layout
+Bronze preserves source-relative paths.
+
+Silver uses versioned recording prefixes:
 
 ```text
-bronze/
-  physionet/
-    sleep-edfx/
-      1.0.0/
-        sleep-cassette/
-          SC...-PSG.edf
-          SC...-Hypnogram.edf
-        sleep-telemetry/
-          ST...-PSG.edf
-          ST...-Hypnogram.edf
-        RECORDS
-        SC-subjects.xls
-        ST-subjects.xls
+silver/physionet/sleep-edfx/1.0.0/<collection>/<recording>/
+  schema_version=<version>/
+    transform_version=<version>/
+      source_pair_id=<sha256>/
+        config_id=<sha256>/
+          recordings/part-00000.parquet
+          channels/part-00000.parquet
+          sleep_stage_intervals/part-00000.parquet
+          sleep_stage_epochs/part-00000.parquet
+          signals/channel=<normalized_name>/part-*.parquet
+          _SUCCESS.json
 ```
 
-Object keys preserve the source-relative path.
+`gold` is reserved for future curated high-volume analytical and ML-ready
+Parquet outputs. It is not the same thing as PostgreSQL `mart`.
 
-Example:
-
-```text
-physionet/sleep-edfx/1.0.0/sleep-cassette/SC4001E0-PSG.edf
-```
-
-## Quarantine layout
-
-```text
-quarantine/
-  source_system/
-  pipeline_run_id/
-  payload
-```
-
-PostgreSQL stores quarantine metadata and object pointers.
-
-## Repository policy
-
-Real source files and generated Parquet files are excluded from
-Git through `.gitignore`.
+Large quarantine payloads live in `quarantine`; PostgreSQL stores pointers.
+Real EDF and generated Parquet files are excluded from Git.

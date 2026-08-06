@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=16
+total=17
 
 
 run_test() {
@@ -88,6 +88,10 @@ run_test \
 run_test \
     "Check Extract failure observability" \
     "neuro_sleep.ingestion.sleep_edf_extract_observability_smoke"
+
+run_test \
+    "Check Extract interruption cleanup" \
+    "neuro_sleep.ingestion.sleep_edf_interrupt_cleanup_smoke"
 
 run_test \
     "Check Bronze reconciliation" \

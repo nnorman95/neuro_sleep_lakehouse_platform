@@ -104,6 +104,107 @@ def run_smoke_test() -> None:
         "special_stage_labels_warning=true"
     )
 
+    telemetry_like_recording = replace(
+        bundle.recording,
+        duration_seconds=(
+            bundle.epochs[-1].end_seconds
+            + 3140.0
+        ),
+    )
+
+    telemetry_like_bundle = replace(
+        bundle,
+        recording=telemetry_like_recording,
+    )
+
+    telemetry_like_report = (
+        run_silver_quality_checks(
+            telemetry_like_bundle
+        )
+    )
+
+    if not telemetry_like_report.passed:
+        raise RuntimeError(
+            "Telemetry-like undercoverage "
+            "was treated as an error"
+        )
+
+    telemetry_warning_codes = {
+        issue.code
+        for issue
+        in telemetry_like_report.issues
+        if issue.severity == "warning"
+    }
+
+    expected_telemetry_warnings = {
+        "RECORDING_NOT_EPOCH_ALIGNED",
+        "UNANNOTATED_PSG_TAIL",
+    }
+
+    if not expected_telemetry_warnings.issubset(
+        telemetry_warning_codes
+    ):
+        raise RuntimeError(
+            "Telemetry-like warnings were "
+            "not produced: "
+            f"{telemetry_warning_codes}"
+        )
+
+    if any(
+        issue.code
+        == "EPOCH_COVERAGE_END_MISMATCH"
+        for issue
+        in telemetry_like_report.issues
+    ):
+        raise RuntimeError(
+            "Unannotated PSG tail was "
+            "misclassified as epoch overrun"
+        )
+
+    print(
+        "non_aligned_recording_warning=true"
+    )
+    print(
+        "unannotated_psg_tail_warning=true"
+    )
+    print(
+        "telemetry_undercoverage_allowed=true"
+    )
+
+    overrun_recording = replace(
+        bundle.recording,
+        duration_seconds=(
+            bundle.epochs[-1].end_seconds
+            - 10.0
+        ),
+    )
+
+    overrun_bundle = replace(
+        bundle,
+        recording=overrun_recording,
+    )
+
+    overrun_report = (
+        run_silver_quality_checks(
+            overrun_bundle
+        )
+    )
+
+    if not any(
+        issue.code
+        == "EPOCH_COVERAGE_END_MISMATCH"
+        and issue.severity == "error"
+        for issue in overrun_report.issues
+    ):
+        raise RuntimeError(
+            "Epoch coverage overrun was not "
+            "kept as an error"
+        )
+
+    print(
+        "epoch_coverage_overrun_blocked=true"
+    )
+
     bad_recording = replace(
         bundle.recording,
         channel_count=99,

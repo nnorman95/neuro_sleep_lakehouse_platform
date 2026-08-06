@@ -18,6 +18,25 @@ QualitySeverity = Literal[
 ]
 
 
+class SilverQualityError(ValueError):
+    def __init__(
+        self,
+        report: "SilverQualityReport",
+    ) -> None:
+        self.report = report
+
+        details = "; ".join(
+            f"{issue.code}: {issue.message}"
+            for issue in report.issues
+            if issue.severity == "error"
+        )
+
+        super().__init__(
+            "Silver quality checks failed: "
+            f"{details}"
+        )
+
+
 @dataclass(frozen=True)
 class QualityIssue:
     code: str
@@ -57,14 +76,8 @@ class SilverQualityReport:
         if not errors:
             return
 
-        details = "; ".join(
-            f"{issue.code}: {issue.message}"
-            for issue in errors
-        )
-
-        raise ValueError(
-            "Silver quality checks failed: "
-            f"{details}"
+        raise SilverQualityError(
+            report=self
         )
 
 
@@ -119,23 +132,49 @@ def check_recording_metadata(
         expected_epoch_count_exact
     )
 
-    if not isclose(
+    recording_is_epoch_aligned = isclose(
         expected_epoch_count_exact,
         expected_epoch_count,
         abs_tol=FLOAT_TOLERANCE,
-    ):
+    )
+
+    if not recording_is_epoch_aligned:
+        duration_remainder_seconds = (
+            recording.duration_seconds
+            % EPOCH_SECONDS
+        )
+
         add_issue(
             issues,
             code="RECORDING_NOT_EPOCH_ALIGNED",
-            severity="error",
+            severity="warning",
             message=(
                 "recording duration is not "
-                "divisible by 30 seconds"
+                "divisible by 30 seconds; "
+                "remainder="
+                f"{duration_remainder_seconds} "
+                "seconds"
             ),
         )
 
-    elif (
-        recording.in_range_epoch_count
+    epochs_cover_recording = (
+        bool(bundle.epochs)
+        and isclose(
+            bundle.epochs[0].start_seconds,
+            0.0,
+            abs_tol=FLOAT_TOLERANCE,
+        )
+        and isclose(
+            bundle.epochs[-1].end_seconds,
+            recording.duration_seconds,
+            abs_tol=FLOAT_TOLERANCE,
+        )
+    )
+
+    if (
+        recording_is_epoch_aligned
+        and epochs_cover_recording
+        and recording.in_range_epoch_count
         != expected_epoch_count
     ):
         add_issue(
@@ -144,7 +183,8 @@ def check_recording_metadata(
             severity="error",
             message=(
                 "in_range_epoch_count does "
-                "not match recording duration"
+                "not match fully annotated "
+                "recording duration"
             ),
         )
 
@@ -505,33 +545,64 @@ def check_epochs(
     first_epoch = bundle.epochs[0]
     last_epoch = bundle.epochs[-1]
 
-    if not isclose(
-        first_epoch.start_seconds,
-        0.0,
-        abs_tol=FLOAT_TOLERANCE,
+    if first_epoch.start_seconds > (
+        FLOAT_TOLERANCE
+    ):
+        add_issue(
+            issues,
+            code="UNANNOTATED_PSG_HEAD",
+            severity="warning",
+            message=(
+                "PSG begins before the first "
+                "sleep-stage epoch by "
+                f"{first_epoch.start_seconds} "
+                "seconds"
+            ),
+        )
+
+    elif first_epoch.start_seconds < (
+        -FLOAT_TOLERANCE
     ):
         add_issue(
             issues,
             code="EPOCH_COVERAGE_START_MISMATCH",
             severity="error",
             message=(
-                "first emitted epoch does not "
-                "start at zero"
+                "first emitted epoch starts "
+                "before the PSG timeline"
             ),
         )
 
-    if not isclose(
-        last_epoch.end_seconds,
-        bundle.recording.duration_seconds,
-        abs_tol=FLOAT_TOLERANCE,
+    coverage_delta_seconds = (
+        bundle.recording.duration_seconds
+        - last_epoch.end_seconds
+    )
+
+    if coverage_delta_seconds > (
+        FLOAT_TOLERANCE
+    ):
+        add_issue(
+            issues,
+            code="UNANNOTATED_PSG_TAIL",
+            severity="warning",
+            message=(
+                "PSG continues after the last "
+                "sleep-stage epoch by "
+                f"{coverage_delta_seconds} "
+                "seconds"
+            ),
+        )
+
+    elif coverage_delta_seconds < (
+        -FLOAT_TOLERANCE
     ):
         add_issue(
             issues,
             code="EPOCH_COVERAGE_END_MISMATCH",
             severity="error",
             message=(
-                "last emitted epoch does not "
-                "end at recording duration"
+                "last emitted epoch extends "
+                "beyond recording duration"
             ),
         )
 

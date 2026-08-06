@@ -52,6 +52,32 @@ skipped
 warning
 ```
 
+### `ops.file_attempt`
+
+Stores immutable per-run history for individual object-processing attempts.
+
+Main columns:
+
+```text
+attempt_id uuid default uuidv7()
+pipeline_run_id
+source_system
+source_url
+bucket
+object_key
+file_name
+file_type
+status
+resolution
+file_size_bytes
+checksum_sha256
+error_type
+error_message
+started_at
+finished_at
+created_at
+```
+
 ### `raw.file_registry`
 
 Registers files from external sources and their object-storage locations.
@@ -161,13 +187,48 @@ updated_at
 
 `updated_at` is maintained by a trigger.
 
+### `governance.source_system_registry`
+
+Registers external source identity, dataset version, source access model,
+sensitivity flags, internal platform access policy, and operational status.
+
+Current Sleep-EDF policy:
+
+```text
+access_model = open
+credential_required = false
+access_policy = restricted
+status = active
+```
+
+External open access and internal patient-level access are intentionally separate concepts.
+
+### Current Silver staging tables
+
+```text
+staging.silver_recordings
+staging.silver_channels
+staging.silver_sleep_stage_intervals
+staging.silver_sleep_stage_epochs
+```
+
+These are current landing tables for low-volume Silver metadata and epochs.
+A corrective identity/version-lineage migration is planned before the production
+Silver-to-staging loader is enabled.
+
 ## Current Governance Coverage
 
 | Table | Classified Columns |
 |---|---:|
-| `ops.pipeline_run` | 13 |
+| `ops.pipeline_run` | 14 |
+| `ops.file_attempt` | 17 |
 | `quality.quarantine_records` | 16 |
 | `raw.file_registry` | 13 |
+| `governance.source_system_registry` | 18 |
+| `staging.silver_recordings` | 13 |
+| `staging.silver_channels` | 13 |
+| `staging.silver_sleep_stage_intervals` | 9 |
+| `staging.silver_sleep_stage_epochs` | 10 |
 
 ## SQL Execution
 
