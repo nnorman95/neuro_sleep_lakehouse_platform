@@ -44,6 +44,19 @@ class SilverPipelineResult:
         return self.write_result.output_prefix
 
     @property
+    def source_pair_id(self) -> str:
+        return (
+            self.write_result.source_pair_id
+        )
+
+    @property
+    def input_fingerprint(self) -> str:
+        return (
+            self.write_result
+            .input_fingerprint
+        )
+
+    @property
     def data_object_count(self) -> int:
         return (
             self.write_result
