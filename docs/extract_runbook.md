@@ -1,99 +1,129 @@
 # Sleep-EDF Extract Runbook
 
-## Purpose
+## 1. Purpose
 
-This runbook describes how to run, inspect, recover, and validate the Sleep-EDF Extract pipeline.
+This runbook describes how to run, inspect, recover, and validate the Sleep-EDF
+Extract pipeline.
 
-The Extract pipeline:
+The pipeline:
 
 - prevents concurrent execution with a PostgreSQL advisory lock;
-- records pipeline runs in `ops.pipeline_run`;
+- records runs in `ops.pipeline_run`;
 - records per-object outcomes in `ops.file_attempt`;
-- updates pipeline liveness through `heartbeat_at`;
-- stores verified source files in the MinIO `bronze` bucket;
-- reconciles MinIO objects with `raw.file_registry`.
+- updates liveness through `heartbeat_at`;
+- downloads through streaming HTTP;
+- verifies official SHA-256 checksums;
+- stores source objects in MinIO `bronze`;
+- registers verified objects in `raw.file_registry`;
+- reconciles MinIO and PostgreSQL state;
+- safely handles failure and user interruption.
 
-## Important terminal rule
+## 2. Terminal Rule
 
-Commands beginning with `PYTHONPATH=`, `make`, `docker compose`, or `ps aux` must be run in the normal shell prompt:
+Run shell commands at the normal shell prompt:
 
 ```text
 (.venv) norman@Mac neuro_sleep_lakehouse_platform %
 ```
 
-Do not paste those commands into the interactive PostgreSQL prompt:
+Do not paste `make`, `docker compose`, or `PYTHONPATH=...` commands into the
+interactive PostgreSQL prompt:
 
 ```text
 neuro_sleep=#
 ```
 
-To cancel unfinished SQL, press `Ctrl + C`. To leave `psql`, enter:
+Exit `psql` with:
 
 ```text
 \q
 ```
 
-## Prerequisites
-
-Start PostgreSQL and MinIO:
+## 3. Prerequisites
 
 ```bash
+cd "/Users/norman/Documents/S/Data Engineering/neuro_sleep_lakehouse_platform"
+source .venv/bin/activate
 make up
-```
-
-Apply database migrations and seeds:
-
-```bash
+make ps
 make migrate
 ```
 
-Run platform smoke tests:
+Run platform checks before production-like work:
 
 ```bash
 make smoke
-```
-
-Run reliability and failure tests:
-
-```bash
 make reliability-smoke
 ```
 
-## Normal Extract run
+## 4. Source Configuration
 
-Run Extract for one Sleep-EDF recording:
+Typical sample settings:
 
-```bash
-SLEEP_EDF_MAX_RECORDINGS=1 \
-PYTHONPATH=src \
-python -m neuro_sleep.ingestion.sleep_edf_extract
+```env
+ACTIVE_SOURCE=sleep_edf
+DATA_PROFILE=sample
+SLEEP_EDF_VERSION=1.0.0
+SLEEP_EDF_MAX_RECORDINGS=4
+SLEEP_EDF_INCLUDE_CASSETTE=true
+SLEEP_EDF_INCLUDE_TELEMETRY=true
+SLEEP_EDF_INCLUDE_METADATA=true
 ```
 
-A successful run should end with messages similar to:
+For an unrestricted source selection:
+
+```env
+DATA_PROFILE=full
+```
+
+## 5. Normal Extract Run
+
+Example one-recording run:
+
+```bash
+SLEEP_EDF_MAX_RECORDINGS=1 PYTHONPATH=src python -m neuro_sleep.ingestion.sleep_edf_extract
+```
+
+Existing valid objects are skipped. A verified object missing only its registry
+finalization can be recovered without redownloading.
+
+## 6. Interruption Safety
+
+Pressing `Ctrl + C` during an active download raises `KeyboardInterrupt`.
+Implemented cleanup behavior:
 
 ```text
-✓ Completed
-🔓 Pipeline lock released
+active file attempt -> failed
+pipeline run        -> failed
+heartbeat           -> stopped
+pipeline lock       -> released
+HTTP response       -> closed
+Requests session    -> closed
+MinIO client        -> closed
+unfinished .part    -> removed
+interruption        -> re-raised to terminal
 ```
 
-Existing valid objects are skipped instead of downloaded again.
+Do not use `kill -9` for normal cancellation because it prevents application
+cleanup handlers from running.
 
-## Inspect recent pipeline runs
+Console timestamps and download-progress timestamps use UTC.
+
+## 7. Inspect Recent Extract Runs
 
 ```bash
-docker compose exec -T postgres \
-psql -P pager=off \
--U neuro_sleep \
--d neuro_sleep \
--c "
+docker compose exec -T postgres psql -P pager=off -U neuro_sleep -d neuro_sleep -c "
 select
     run_id,
     pipeline_name,
+    task_name,
     status,
     started_at,
     heartbeat_at,
     finished_at,
     files_processed,
+    rows_read,
+    rows_written,
     error_message
 from ops.pipeline_run
 where pipeline_name = 'sleep_edf_extract'
@@ -102,16 +132,10 @@ limit 10;
 "
 ```
 
-## Inspect the latest Extract file-attempt history
-
-This query automatically selects the latest `sleep_edf_extract` run. No UUID needs to be copied or replaced.
+## 8. Inspect Latest File Attempts
 
 ```bash
-docker compose exec -T postgres \
-psql -P pager=off \
--U neuro_sleep \
--d neuro_sleep \
--c "
+docker compose exec -T postgres psql -P pager=off -U neuro_sleep -d neuro_sleep -c "
 with latest_run as (
     select run_id
     from ops.pipeline_run
@@ -124,6 +148,7 @@ select
     attempt.status,
     attempt.resolution,
     attempt.file_size_bytes,
+    attempt.checksum_sha256,
     attempt.error_type,
     attempt.error_message,
     attempt.started_at,
@@ -135,142 +160,37 @@ order by attempt.started_at;
 "
 ```
 
-Possible file-attempt results:
-
-| Status | Resolution | Meaning |
-|---|---|---|
-| `uploaded` | `downloaded_and_uploaded` | Object was downloaded, verified, uploaded, and registered |
-| `skipped` | `existing_valid` | MinIO and PostgreSQL already contained a valid object |
-| `skipped` | `recovered_existing` | Valid MinIO object existed and its registry state was recovered |
-| `failed` | `null` | Object processing failed |
-
-## Failed Extract run
-
-A failed pipeline should have:
+Expected terminal attempt statuses include:
 
 ```text
-ops.pipeline_run.status = failed
-ops.pipeline_run.error_message is not null
+uploaded
+skipped
+failed
 ```
 
-The failed object should have:
+Terminal attempt rows are immutable.
 
-```text
-ops.file_attempt.status = failed
-error_type is not null
-error_message is not null
-finished_at is not null
-```
-
-Inspect the pipeline run and its file-attempt rows before deleting or modifying anything.
-
-After fixing a temporary source, PostgreSQL, or MinIO problem, rerun Extract. Valid completed objects will be skipped.
-
-## Stale heartbeat check
-
-List pipeline runs that are still marked `started`:
+## 9. Inspect Registered Bronze Objects
 
 ```bash
-docker compose exec -T postgres \
-psql -P pager=off \
--U neuro_sleep \
--d neuro_sleep \
--c "
+docker compose exec -T postgres psql -P pager=off -U neuro_sleep -d neuro_sleep -c "
 select
-    run_id,
-    pipeline_name,
+    file_id,
+    bucket,
+    object_key,
+    file_size_bytes,
+    checksum_sha256,
     status,
-    started_at,
-    heartbeat_at,
-    now() - heartbeat_at as heartbeat_age
-from ops.pipeline_run
-where status = 'started'
-order by heartbeat_at;
+    ingested_at
+from raw.file_registry
+where source_system = 'physionet_sleep_edf'
+order by object_key;
 "
 ```
 
-Check whether an Extract process is active:
+## 10. Reconciliation
 
-```bash
-ps aux \
-| grep \
-'[n]euro_sleep.ingestion.sleep_edf_extract'
-```
-
-Do not manually close a run while its process is active.
-
-## Safely close a confirmed stale run
-
-Use this non-interactive shell block only after confirming that the process no longer exists. It validates the UUID before sending it to PostgreSQL.
-
-```bash
-read -r -p "Paste the confirmed stale run UUID: " RUN_ID
-
-if [[ ! "$RUN_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
-    echo "Invalid UUID format"
-    exit 1
-fi
-
-docker compose exec -T postgres \
-psql -v ON_ERROR_STOP=1 \
--P pager=off \
--U neuro_sleep \
--d neuro_sleep \
--v run_id="$RUN_ID" \
--c "
-with updated_run as (
-    update ops.pipeline_run
-    set
-        status = 'failed',
-        finished_at = now(),
-        error_message =
-            'Manually closed as stale after operator verification.'
-    where run_id = :'run_id'::uuid
-      and status = 'started'
-    returning run_id
-)
-select count(*) as updated_rows
-from updated_run;
-"
-```
-
-Expected result for one confirmed stale run:
-
-```text
-updated_rows
-------------
-1
-```
-
-If `updated_rows` is `0`, PostgreSQL changed nothing. Recheck the UUID and current run status instead of forcing an update.
-
-The PostgreSQL advisory lock is connection-scoped. PostgreSQL releases it automatically when the crashed process connection disappears.
-
-## Concurrent Extract blocked
-
-A second Extract process should print:
-
-```text
-⛔ Extract blocked  another run is already active
-```
-
-It exits with status code `2`.
-
-Do not bypass the lock. Wait for the active Extract to finish.
-
-When no active process exists but a pipeline row remains `started`, follow the stale-heartbeat procedure.
-
-## Reconciliation check
-
-The reconciliation service compares:
-
-- MinIO object existence;
-- PostgreSQL registry existence;
-- registry status;
-- file size;
-- SHA256 metadata.
-
-Run this command only from the normal shell prompt, not from `psql`:
+Run from the shell:
 
 ```bash
 PYTHONPATH=src python - <<'PY'
@@ -283,7 +203,6 @@ from neuro_sleep.storage.object_storage import (
     get_object_storage_client,
 )
 
-
 client = get_object_storage_client()
 
 try:
@@ -292,18 +211,12 @@ try:
         prefix="physionet/sleep-edfx/1.0.0/",
         client=client,
     )
-
 finally:
     client.close()
 
-
-counts = Counter(
-    result.status
-    for result in results
-)
+counts = Counter(result.status for result in results)
 
 print(f"reconciled_object_count={len(results)}")
-
 for status in (
     "healthy",
     "missing_in_storage",
@@ -322,71 +235,74 @@ for result in results:
 PY
 ```
 
-Possible reconciliation statuses:
-
-| Status | Meaning |
-|---|---|
-| `healthy` | MinIO and PostgreSQL metadata match |
-| `missing_in_storage` | Registry row exists but the MinIO object is missing |
-| `missing_in_registry` | MinIO object exists but the registry row is missing |
-| `metadata_mismatch` | Registry status, size, or SHA256 differs |
-
-## Reconciliation recovery
+## 11. Recovery Guidance
 
 ### `missing_in_storage`
 
-Rerun Extract. The source object should be downloaded, verified, uploaded, and registered again.
+Rerun Extract. The object should be downloaded, verified, uploaded, and
+registered again.
 
 ### `missing_in_registry`
 
-Rerun Extract. When the existing MinIO object has the correct official SHA256 metadata, the pipeline should recover its registry row without downloading the object again.
+Rerun Extract. A valid MinIO object with matching official checksum metadata can
+recover its registry row without a source download.
 
 ### `metadata_mismatch`
 
-Do not manually trust either MinIO or PostgreSQL. Rerun Extract so the object can be checked against the official source manifest and checksum.
+Do not manually trust either side. Rerun Extract so the object is checked
+against the official source manifest.
 
 ### Verified object with database finalization failure
 
-The terminal may report:
+Preserve the object and rerun Extract. Verified-object recovery should complete
+the PostgreSQL state.
 
-```text
-verified_object_preserved
-registry_finalization_pending=true
-```
+### Leftover `.part` file
 
-Do not delete this object. Rerun Extract so verified-object recovery can finish the PostgreSQL registry state.
+A normal handled failure or interruption removes unfinished `.part` files. If a
+process was forcibly terminated, first confirm no Extract process is active and
+then remove only the clearly unfinished local temporary file. Do not delete
+verified MinIO objects as generic cleanup.
 
-## Dedicated reliability checks
+## 12. Concurrent-Run Protection
 
-Parallel-run protection:
+Only one Extract run for the protected pipeline scope should hold the advisory
+lock. A blocked concurrent invocation should not be registered as a normal
+active run.
 
-```bash
-PYTHONPATH=src \
-python -m neuro_sleep.ops.pipeline_lock_smoke
-```
+Do not bypass the lock manually.
 
-File-attempt history:
-
-```bash
-PYTHONPATH=src \
-python -m neuro_sleep.ops.file_attempt_smoke
-```
-
-Bronze reconciliation:
+## 13. Dedicated Reliability Checks
 
 ```bash
-PYTHONPATH=src \
-python -m neuro_sleep.reconciliation.bronze_reconciliation_smoke
+PYTHONPATH=src python -m neuro_sleep.ops.pipeline_lock_smoke
+PYTHONPATH=src python -m neuro_sleep.ops.file_attempt_smoke
+PYTHONPATH=src python -m neuro_sleep.reconciliation.bronze_reconciliation_smoke
+PYTHONPATH=src python -m neuro_sleep.ingestion.sleep_edf_interrupt_cleanup_smoke
 ```
 
-## Final validation
-
-```bash
-make smoke
-```
+The registered suite is preferred:
 
 ```bash
 make reliability-smoke
 ```
 
-Both commands must finish successfully before Extract reliability changes are considered complete.
+## 14. Final Validation
+
+```bash
+make test
+git diff --check
+```
+
+Current verified result:
+
+```text
+Core:        12/12
+Reliability: 17/17
+Silver:      24/24
+Total:       53/53
+```
+
+Extract changes are not complete until failure handling, interruption cleanup,
+resource closure, lock release, heartbeat termination, and reconciliation remain
+verified.

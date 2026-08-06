@@ -1,124 +1,142 @@
 # Quality Rules
 
-This document describes implemented and planned data quality rules for the NeuroSleep Lakehouse Platform.
+This document separates implemented quality behavior from future analytical
+quality work.
 
-The goal is simple: bad data should never disappear silently. Every rejected, suspicious, duplicated, late, or contract-breaking record should have a visible reason and a defined handling strategy.
+## 1. Principles
 
-## 1. Quality Principles
+- Keep Bronze source objects unchanged.
+- Validate before promoting data to a trusted output.
+- Never silently drop rejected or suspicious data.
+- Preserve source file, object, recording, and pipeline-run lineage.
+- Distinguish errors, warnings, informational results, and critical failures.
+- Make idempotency and reconciliation testable.
+- Keep source-preserving values when analytical mappings are added.
+- Do not document future checks as already implemented.
 
-The platform should follow these rules:
+## 2. Severity and Status
 
-- Keep raw data unchanged.
-- Validate data before promoting it to trusted layers.
-- Never silently drop bad records.
-- Store rejected records in quarantine with a clear reason.
-- Track which source file created the bad record.
-- Track which pipeline run detected the issue.
-- Separate errors, warnings, and informational checks.
-- Prefer explicit rules over hidden assumptions.
-
-## 2. Quality Flow
-
-```text
-raw or parsed record
--> validation rule
--> valid record goes forward
--> invalid record goes to quarantine
--> quality result is logged
-```
-
-Bad data should be handled like this:
+Allowed durable quality severities:
 
 ```text
-bad record
--> quality.quarantine_records
--> quarantine object storage
--> quality report
+info
+warning
+error
+critical
 ```
 
-## 3. Severity Levels
+Allowed durable quality statuses:
 
-| Severity | Meaning | Example |
-|----------|---------|---------|
-| error | Record cannot be trusted and should not continue | Missing subject id |
-| warning | Record can continue, but the issue should be visible | Optional metadata missing |
-| info | Useful observation, not a failure | New source file type detected |
+```text
+passed
+warning
+failed
+skipped
+```
 
-Severity should be consistent. A rule should not be an error in one job and a warning in another unless the reason is documented.
+General behavior:
 
-## 4. Handling Actions
+| Severity | Pipeline behavior |
+|---|---|
+| `info` | record observation and continue |
+| `warning` | preserve visibility and continue when explicitly allowed |
+| `error` | block the affected trusted publication |
+| `critical` | block publication and require operational attention |
 
-| Action | Meaning |
-|--------|---------|
-| pass | Record is valid and continues |
-| warn | Record continues, but warning is logged |
-| quarantine | Record is rejected and stored with reason |
-| deduplicate | Duplicate is removed or marked using explicit rules |
-| backfill | Late data updates previously processed results |
-| contract_failure | Schema or column expectation failed |
-| map_to_unknown | Unsupported value is mapped to a controlled unknown value |
+A rule may differ between collections only when the source semantics and reason
+are documented.
 
-## 5. Core Error Codes
+## 3. Implemented Quality Storage
 
-| Error Code | Severity | Default Action | Meaning |
-|------------|----------|----------------|---------|
-| missing_subject_id | error | quarantine | Subject id is missing |
-| missing_recording_id | error | quarantine | Recording id is missing |
-| missing_source_file_id | error | quarantine | Record cannot be linked to a source file |
-| unknown_sleep_stage | error | quarantine or map_to_unknown | Sleep stage label is not supported |
-| negative_duration | error | quarantine | Duration is below zero |
-| zero_duration | error | quarantine | Duration is zero where positive duration is required |
-| invalid_timestamp | error | quarantine | Timestamp cannot be parsed |
-| end_before_start | error | quarantine | End time is earlier than start time |
-| duplicate_file | warning | deduplicate | File checksum already exists |
-| duplicate_recording | warning | deduplicate | Same recording appears more than once |
-| duplicate_epoch | warning | deduplicate | Same epoch appears more than once |
-| missing_channel | warning | warn or quarantine | Expected signal channel is missing |
-| schema_drift_extra_column | warning | contract_failure | Unexpected extra column appears |
-| schema_drift_missing_column | error | contract_failure | Required column is missing |
-| corrupted_metadata | error | quarantine | Metadata file cannot be parsed |
-| late_arriving_annotation | warning | backfill | Annotation arrives after recording was processed |
-| out_of_order_event | warning | warn or reorder | Device event arrives out of timestamp order |
-| duplicate_device_event | warning | deduplicate | Device event id already exists |
+### `quality.quarantine_records`
 
-## 6. Required Field Rules
+Stores rejected-record metadata and either:
 
-Important fields must not be null.
+- a small `raw_payload`; or
+- a pointer to a large object in MinIO `quarantine`.
 
-| Table or Layer | Field | Rule |
-|----------------|-------|------|
-| raw.file_registry | file_id | Not null and unique |
-| raw.file_registry | source_system | Not null |
-| raw.file_registry | object_key | Not null |
-| raw.file_registry | checksum_sha256 | Not null |
-| Silver recordings | recording_id | Not null and unique within the dataset |
-| Silver channels | channel_id | Not null and unique |
-| Silver channels | recording_id | Must reference the recording |
-| Silver sleep-stage intervals | interval_id | Not null and unique |
-| Silver sleep-stage epochs | epoch_id | Not null and unique |
-| Silver sleep-stage epochs | recording_id | Must reference the recording |
-| Silver sleep-stage epochs | normalized_stage | Not null and accepted source-preserving value |
-| quality.quarantine_records | error_code | Not null |
-| quality.quarantine_records | raw_payload | Not null when available |
+### `quality.quality_check_results`
 
-## 7. Referential Integrity Rules
+Stores durable check history with:
 
-Records should reference existing parent records.
+```text
+quality_result_id
+pipeline_run_id
+source_system
+data_layer
+dataset_name
+recording_id
+record_key
+check_name
+severity
+status
+rows_checked
+rows_failed
+error_code
+message
+details
+checked_at
+created_at
+```
 
-| Child | Parent | Rule |
-|-------|--------|------|
-| recording.subject_id | subject.subject_id | Recording must belong to an existing subject |
-| channel.recording_id | recording.recording_id | Channel must belong to an existing recording |
-| sleep_epoch.recording_id | recording.recording_id | Epoch must belong to an existing recording |
-| signal_quality.recording_id | recording.recording_id | Quality record must belong to an existing recording |
-| quarantine.source_file_id | raw.file_registry.file_id | Quarantine record should link to source file when possible |
-| quarantine.pipeline_run_id | ops.pipeline_run.run_id | Quarantine record should link to pipeline run when possible |
+The table is implemented by migration `026_create_quality_check_results.sql`.
+It is not a future placeholder.
 
-If a required parent record is missing, the child record should not be promoted silently.
+`data_layer` accepts both lakehouse and PostgreSQL scopes because checks can
+apply to either system.
 
-## 8. Sleep Stage Rules
+## 4. Bronze Integrity Rules
 
-Implemented source-preserving Silver sleep stages:
+Implemented Bronze checks include:
+
+- safe source-relative paths;
+- complete PSG/Hypnogram pairing;
+- official checksum-manifest membership;
+- HTTP success and non-empty payloads;
+- exact file size when known;
+- official SHA-256 match;
+- valid object-storage metadata;
+- `raw.file_registry` consistency;
+- immutable terminal file-attempt status;
+- one active pipeline lock;
+- heartbeat liveness;
+- cleanup after failure and interruption;
+- MinIO/PostgreSQL reconciliation.
+
+Reconciliation statuses:
+
+```text
+healthy
+missing_in_storage
+missing_in_registry
+metadata_mismatch
+```
+
+No mismatch is silently accepted as healthy.
+
+## 5. Silver Structural Rules
+
+A Silver recording publication requires:
+
+- one valid recording row;
+- channel count matching parsed PSG metadata;
+- valid channel positions and sampling frequencies;
+- valid source annotation intervals;
+- valid 30-second emitted epochs;
+- consistent `recording_id` across related datasets;
+- finite signal values;
+- valid sample indexes and chunk boundaries;
+- expected Arrow schemas;
+- verified Parquet round trips;
+- payload size and checksum validation;
+- a complete `_SUCCESS.json` manifest;
+- successful reconciliation.
+
+Quality errors block `_SUCCESS.json` publication.
+
+## 6. Sleep-Stage Rules
+
+Implemented source-preserving Silver values:
 
 ```text
 W
@@ -131,362 +149,256 @@ UNKNOWN
 MOVEMENT
 ```
 
-Silver deliberately preserves historical source Stage 3 and Stage 4 separately.
+Source Stage 3 and Stage 4 remain separate in Silver. An analytical Warehouse
+mapping may combine both into analytical `N3`, but the source-normalized value
+must remain traceable.
 
-Planned analytical standardized stages:
+Unsupported empty or unexpected labels are errors unless a documented rule maps
+them explicitly to `UNKNOWN`.
+
+`UNKNOWN` and `MOVEMENT` must not silently become ordinary sleep stages.
+
+## 7. Time and Coverage Rules
+
+General rules:
+
+- recording duration must be positive;
+- channel sampling frequency must be positive;
+- annotation duration must be positive;
+- emitted epoch duration must equal 30 seconds;
+- emitted epoch number must be unique within one concrete Silver recording;
+- source intervals may begin before PSG time zero;
+- emitted epoch start positions remain non-negative;
+- signal chunks must stay within the requested extraction range.
+
+### Cassette overhang
+
+For the inspected Cassette data, annotation coverage can extend beyond PSG end.
+
+Implemented behavior:
+
+- preserve the original interval;
+- calculate trailing overhang;
+- count out-of-range epochs;
+- emit only epochs inside PSG coverage;
+- do not attach out-of-range annotation epochs to signal samples.
+
+### Telemetry undercoverage
+
+Telemetry can have a non-30-second-aligned recording duration and an unannotated
+PSG tail.
+
+Implemented behavior:
 
 ```text
-W
-N1
-N2
-N3
-REM
-UNKNOWN
+non-aligned recording duration -> warning
+unannotated PSG tail           -> warning
+real emitted epoch past PSG    -> error
 ```
 
-The analytical mapping may combine Silver `N3` and `N4` into analytical `N3`.
-`UNKNOWN` and `MOVEMENT` must remain explicit and must not silently become
-ordinary sleep stages.
+The complete PSG signal is retained. Only real annotation-derived epochs are
+emitted.
 
-Possible mapping examples:
+## 8. Channel Rules
 
-| Source Value | Standard Value |
-|--------------|----------------|
-| Wake | W |
-| Sleep stage W | W |
-| W | W |
-| NREM 1 | N1 |
-| Sleep stage 1 | N1 |
-| N1 | N1 |
-| NREM 2 | N2 |
-| Sleep stage 2 | N2 |
-| N2 | N2 |
-| NREM 3 | N3 |
-| Sleep stage 3 | N3 |
-| N3 | N3 |
-| REM sleep | REM |
-| Sleep stage R | REM |
-| REM | REM |
-| Unknown | UNKNOWN |
+- channel names are normalized but source labels remain available;
+- channel position must be positive and unique within a recording;
+- sampling frequency must be positive;
+- physical unit may be null because the source can omit it;
+- physical and digital ranges must remain structurally valid;
+- channel metadata is recording-specific and must not be assumed globally
+  constant.
 
-Unsupported values such as `N5`, `BAD_STAGE`, or empty labels should be handled explicitly.
+Missing optional units can produce a warning without invalidating the recording.
 
-Default handling:
+## 9. Subject-Metadata Rules
 
-```text
-unknown_sleep_stage -> quarantine
-```
+Implemented rules include:
 
-Alternative handling, if documented:
+- collection must be recognized;
+- source subject identifier must be present;
+- source subject number must be non-negative;
+- age must be present and valid for the source workbook;
+- sex code must be valid for the collection-specific mapping;
+- the same logical subject cannot have conflicting demographics;
+- `recording_key` must be present and unique in the normalized publication;
+- night number must be positive;
+- lights-off seconds must be within one day;
+- Telemetry treatment must match the source night context;
+- each recording context must resolve to an emitted `subject_key`;
+- source workbook lineage must be present.
 
-```text
-unknown_sleep_stage -> map_to_unknown
-```
-
-## 9. Time And Duration Rules
-
-Time fields must be valid and logically consistent.
-
-| Rule | Expected Behavior |
-|------|-------------------|
-| Timestamp must be parseable | Invalid timestamp goes to quarantine |
-| End time must be after start time | Invalid row goes to quarantine |
-| Duration must be positive | Negative or zero duration goes to quarantine |
-| Sleep epoch duration should usually be 30 seconds | Invalid epoch duration is quarantined or flagged |
-| Event timestamp must not be null | Invalid device event goes to quarantine |
-
-Example:
+`subject_key` is deterministic from:
 
 ```text
-epoch_end_time <= epoch_start_time
--> error_code=end_before_start
--> quarantine
-```
-
-## 10. Duplicate Rules
-
-Duplicates should be handled by explicit keys.
-
-| Duplicate Type | Detection Key | Default Action |
-|----------------|---------------|----------------|
-| Source file | checksum_sha256 | deduplicate |
-| Recording | source_system + source_recording_id | deduplicate |
-| Subject | source_system + source_subject_id | deduplicate |
-| Sleep epoch | recording_id + epoch_start_time | deduplicate |
-| Device event | event_id | deduplicate |
-
-Duplicate handling should be idempotent. Running the same ingestion twice should not create duplicate trusted records.
-
-## 11. Signal Quality Rules
-
-Signal quality metrics should be bounded and interpretable.
-
-| Field | Rule |
-|-------|------|
-| missing_ratio | Between 0 and 1 |
-| noise_score | Between 0 and 1 when calculated |
-| artifact_score | Between 0 and 1 when calculated |
-| signal_quality_score | Between 0 and 1 |
-| is_usable | Boolean |
-
-Example:
-
-```text
-signal_quality_score < 0 or signal_quality_score > 1
--> quarantine or contract failure
-```
-
-## 12. Device Event Rules
-
-Device events are planned for the Kafka extension.
-
-Expected fields:
-
-```text
-event_id
-device_id
-subject_id
-recording_id
-event_type
-battery_level
-signal_quality
-event_timestamp
-```
-
-Rules:
-
-| Field | Rule |
-|-------|------|
-| event_id | Not null and unique |
-| device_id | Not null |
-| event_timestamp | Not null and parseable |
-| battery_level | Between 0 and 100 |
-| signal_quality | Between 0 and 1 |
-| event_type | Accepted value |
-
-Duplicate event:
-
-```text
-duplicate_device_event -> deduplicate
-```
-
-Out-of-order event:
-
-```text
-out_of_order_event -> warn or reorder
-```
-
-## 13. Schema Drift Rules
-
-Schema drift means the incoming data structure changed.
-
-Examples:
-
-```text
-new unexpected column
-missing required column
-changed data type
-renamed field
-```
-
-Handling:
-
-| Drift Type | Default Action |
-|------------|----------------|
-| Extra optional column | warning or contract failure |
-| Missing required column | contract_failure |
-| Changed required type | contract_failure |
-| Renamed required field | contract_failure |
-
-Schema drift should be recorded in quality results.
-
-## 14. Late-Arriving Data Rules
-
-Late-arriving data means related data arrives after the first processing pass.
-
-Example:
-
-```text
-recording arrives today
-annotation arrives tomorrow
-```
-
-Default handling:
-
-```text
-late_arriving_annotation -> backfill
-```
-
-Backfill rules:
-
-- Reprocess only affected recording when possible.
-- Avoid duplicating existing epochs.
-- Log the backfill in `ops.pipeline_run`.
-- Keep lineage showing which run updated the data.
-
-## 15. Quarantine Record Structure
-
-Quarantine table:
-
-```text
-quality.quarantine_records
-```
-
-Planned columns:
-
-```text
-quarantine_id
 source_system
-source_file_id
-record_key
-raw_payload
-error_code
-error_message
-severity
-detected_at
-pipeline_run_id
-status
+dataset_version
+collection
+source_subject_id
 ```
 
-Physical PostgreSQL statuses:
+It is pseudonymous, not guaranteed anonymous.
+
+## 10. Identity and Idempotency Rules
+
+A concrete recording publication is uniquely described by:
 
 ```text
-open
-reviewed
-resolved
-ignored
+source_system
+source_pair_id
+input_fingerprint
+schema_version
+transform_version
+config_id
 ```
 
-Any future workflow states such as reprocessing should be represented through
-separate operational history or an explicit schema change, not documented as
-valid values unless the database constraint supports them.
-
-## 16. Quality Check Results Structure
-
-Quality result table:
+The output location is unique by:
 
 ```text
-quality.quality_check_results
+silver_bucket
+silver_output_prefix
 ```
 
-Planned columns:
+A matching completed output is skipped. An incomplete output under the same
+versioned prefix is removed and rebuilt. A changed fingerprint or transform
+identity produces a new representation instead of overwriting a valid old one.
+
+Subject metadata uses its own input fingerprint derived from both source
+workbooks and version information.
+
+## 11. Duplicate Rules
+
+Implemented or required keys:
+
+| Dataset | Duplicate identity |
+|---|---|
+| Bronze object | `bucket + object_key` |
+| Source file content check | verified SHA-256 |
+| Silver recording version | version-aware identity tuple |
+| Silver output location | `silver_bucket + silver_output_prefix` |
+| Recording channel | concrete `recording_id + channel position` |
+| Sleep epoch | concrete `recording_id + epoch_number` |
+| Subject | `subject_key` |
+| Recording context | `source_system + dataset_version + collection + recording_key` |
+
+Warehouse duplicate rules will be finalized with Warehouse DDL.
+
+## 12. Warning and Error Examples
+
+Warnings currently supported include:
+
+- missing optional channel units;
+- special source stage labels;
+- Cassette trailing annotation overhang;
+- Telemetry non-aligned duration;
+- Telemetry unannotated PSG tail.
+
+Errors include:
+
+- checksum mismatch;
+- incomplete source pair;
+- unsafe path;
+- invalid channel count;
+- unsupported stage label;
+- duplicate emitted epoch number;
+- emitted epoch beyond PSG coverage;
+- malformed Arrow/Parquet schema;
+- missing expected Silver object;
+- manifest identity mismatch;
+- payload checksum mismatch;
+- conflicting subject demographics;
+- duplicate recording context.
+
+## 13. Phase 6 Staging and Warehouse Quality
+
+Required staging checks:
+
+- manifest and object inventory match;
+- expected schema version is supported;
+- exact source and Silver lineage is populated;
+- subject/context parent relationships resolve;
+- recording context resolves to a logical recording;
+- concrete `recording_id` relationships remain consistent;
+- rerunning the loader creates no duplicates;
+- row counts match source Parquet metadata;
+- failed loads finalize `ops.pipeline_run` correctly.
+
+Required Warehouse checks:
+
+- one row per documented dimension grain;
+- valid surrogate keys;
+- no orphan facts;
+- accepted analytical sleep-stage values;
+- source Stage 3/4 mapping remains traceable;
+- epoch duration equals 30 seconds;
+- uniqueness of `silver_recording_id + epoch_number`;
+- subject and recording relationships are complete for loaded scope;
+- idempotent rebuild/load behavior.
+
+## 14. Future Quality Scope
+
+Not implemented yet:
+
+- window-level signal-quality metrics such as missing ratio, noise score, or
+  artifact score;
+- device-event quality rules;
+- Kafka ordering and duplicate-event checks;
+- Great Expectations integration;
+- intentionally broken-data fixture suite;
+- Gold feature-quality rules;
+- mart-level aggregate checks.
+
+These remain future scope and must not be represented as current datasets.
+
+## 15. Validation Commands
+
+```bash
+make smoke
+make reliability-smoke
+make silver-smoke
+make test
+```
+
+Current regression status:
 
 ```text
-check_id
-check_name
-table_name
-severity
-status
-rows_checked
-rows_failed
-error_code
-pipeline_run_id
-checked_at
-details
+Core:        12/12
+Reliability: 17/17
+Silver:      24/24
+Total:       53/53
 ```
 
-Possible statuses:
+## 16. What Must Not Happen
+
+- modifying Bronze objects to hide source defects;
+- dropping bad rows without traceable handling;
+- treating warnings as invisible success;
+- publishing `_SUCCESS.json` after a quality error;
+- overwriting a valid versioned Silver prefix;
+- loading every signal sample into PostgreSQL;
+- claiming future signal-quality or device-event datasets are implemented;
+- exposing restricted subject identifiers in broad marts by default;
+- documenting a constraint that the physical database does not enforce.
+
+## 17. Current Status
+
+Implemented:
 
 ```text
-passed
-failed
-warning
-skipped
+Bronze integrity and reconciliation
+Quarantine metadata and payload pointers
+Silver structural quality gate
+Silver warning and error semantics
+Durable quality.quality_check_results history
+Silver publication and reconciliation checks
+Subject metadata validation
+Interruption and failure cleanup tests
 ```
 
-## 17. Quality Metrics
-
-Useful quality metrics:
+Next:
 
 ```text
-files_processed
-records_read
-records_written
-records_quarantined
-duplicate_files_detected
-duplicate_records_detected
-quality_checks_passed
-quality_checks_failed
-quarantine_rate
+staging loader quality checks
+subject/context staging relationship checks
+Warehouse Core dbt/SQL tests
 ```
-
-Example:
-
-```text
-quarantine_rate = records_quarantined / records_read
-```
-
-These metrics should eventually appear in dashboards or quality reports.
-
-## 18. First Bad Sample Files
-
-The project should include intentionally broken sample files later.
-
-Planned bad samples:
-
-```text
-missing_subject_id.csv
-duplicate_recording.csv
-unknown_sleep_stage.csv
-negative_duration.csv
-wrong_timestamp.csv
-missing_channel.json
-corrupted_metadata.json
-schema_drift_extra_column.csv
-late_arriving_annotation.csv
-duplicate_device_event.json
-out_of_order_device_events.json
-```
-
-Each bad sample should have an expected handling behavior.
-
-## 19. First Quality Checks To Implement
-
-Start simple.
-
-First checks:
-
-```text
-file_id is not null
-checksum_sha256 is not null
-subject_id is not null
-recording_id is not null
-sleep_stage is accepted value
-epoch_duration_sec equals 30
-recording duration is positive
-recording_end_time is after recording_start_time
-signal_quality_score is between 0 and 1
-```
-
-These checks are enough for the first quality layer.
-
-## 20. What Should Not Happen
-
-Avoid:
-
-- Dropping bad records without logging.
-- Overwriting raw files to fix data.
-- Hiding duplicate records.
-- Building marts from unvalidated raw data.
-- Mixing warnings and errors without rules.
-- Letting unknown sleep stages silently enter trusted tables.
-- Ignoring schema drift.
-- Creating quality reports that are not connected to pipeline runs.
-
-## 21. Current Status
-
-Current status:
-
-```text
-Bronze integrity and reconciliation implemented
-Quarantine metadata and external payload pointers implemented
-Silver structural quality gate implemented
-Silver warning/error checks implemented
-Silver _SUCCESS publication blocked on quality errors
-Durable quality.quality_check_results table not yet implemented
-Great Expectations integration not yet implemented
-Broken-data scenario suite remains a later phase
-```
-
-Quality documentation must remain aligned with physical database constraints and
-implemented Silver schemas.

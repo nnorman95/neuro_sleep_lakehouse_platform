@@ -1,38 +1,45 @@
 # Database Schemas
 
-## Current PostgreSQL Version
+## 1. Current Database
 
-The current local database uses PostgreSQL 18.
+```text
+PostgreSQL: 18.4 locally
+Host port: 5433
+Database: neuro_sleep
+Metadata identifiers: UUIDv7
+```
 
-Metadata IDs use PostgreSQL 18 `uuidv7()` defaults.
+The package supports Python 3.11 or newer; the current development environment
+uses Python 3.13.5.
 
-## Schemas
+## 2. Schema Purposes
 
-| Schema | Purpose |
-|---|---|
-| `raw` | Raw ingestion metadata and file registry |
-| `staging` | Temporary cleaned/intermediate structures |
-| `warehouse` | Analytical warehouse models |
-| `mart` | Final consumption-ready analytical/ML tables |
-| `ops` | Pipeline run logs and operational metadata |
-| `quality` | Quality checks and quarantine metadata |
-| `governance` | Data contracts and column-level classification |
+| Schema | Purpose | Current state |
+|---|---|---|
+| `raw` | source-object registry and ingestion metadata | implemented |
+| `staging` | relational landing area for selected Silver datasets | partially implemented |
+| `warehouse` | dimensional analytical models | schema exists; tables not implemented |
+| `mart` | consumption-ready relational models | schema exists; tables not implemented |
+| `ops` | pipeline execution and file-attempt history | implemented |
+| `quality` | quarantine and durable quality history | implemented |
+| `governance` | source registry, contracts, and classification | implemented |
 
-## Current Tables
+## 3. Implemented Operational Tables
 
 ### `ops.pipeline_run`
 
-Tracks pipeline and task execution.
+Grain: one tracked pipeline or task execution.
 
-Main columns:
+Important columns:
 
 ```text
-run_id uuid default uuidv7()
+run_id
 pipeline_name
- task_name
+task_name
 source_system
 status
 started_at
+heartbeat_at
 finished_at
 rows_read
 rows_written
@@ -54,12 +61,12 @@ warning
 
 ### `ops.file_attempt`
 
-Stores immutable per-run history for individual object-processing attempts.
+Grain: one immutable attempt to process one source object in one pipeline run.
 
-Main columns:
+Important columns:
 
 ```text
-attempt_id uuid default uuidv7()
+attempt_id
 pipeline_run_id
 source_system
 source_url
@@ -78,14 +85,16 @@ finished_at
 created_at
 ```
 
+## 4. Implemented Raw Table
+
 ### `raw.file_registry`
 
-Registers files from external sources and their object-storage locations.
+Grain: one registered source object location.
 
-Main columns:
+Important columns:
 
 ```text
-file_id uuid default uuidv7()
+file_id
 source_system
 source_url
 bucket
@@ -105,94 +114,83 @@ Important constraints:
 ```text
 unique(bucket, object_key)
 file_size_bytes >= 0 when present
-status must be one of the allowed ingestion statuses
+status limited to allowed ingestion states
 ```
+
+## 5. Implemented Quality Tables
 
 ### `quality.quarantine_records`
 
-Stores rejected-record metadata and optional pointers to large quarantined payloads.
+Grain: one rejected or suspicious record/payload reference.
 
-Main columns:
+Small fragments may be stored in `raw_payload`. Large payloads are stored in
+MinIO `quarantine` and referenced through:
 
 ```text
-quarantine_id uuid default uuidv7()
-source_system
-source_file_id
-record_key
-raw_payload
 payload_bucket
 payload_object_key
 payload_size_bytes
 payload_checksum_sha256
-error_code
-error_message
-severity
-detected_at
+```
+
+### `quality.quality_check_results`
+
+Grain: one durable quality-check result for one pipeline run and dataset scope.
+
+Important columns:
+
+```text
+quality_result_id
 pipeline_run_id
-status
-created_at
-```
-
-Design rule:
-
-```text
-Small rejected fragments may be stored in raw_payload.
-Large rejected payloads should be stored in MinIO and referenced through payload_bucket + payload_object_key.
-```
-
-### `governance.data_contract_registry`
-
-Registers data contract files for known tables.
-
-Main columns:
-
-```text
-contract_id uuid default uuidv7()
-table_schema
-table_name
-contract_name
-contract_version
-contract_path
-owner_role
+source_system
 data_layer
+dataset_name
+recording_id
+record_key
+check_name
+severity
 status
+rows_checked
+rows_failed
+error_code
+message
+details
+checked_at
 created_at
-updated_at
 ```
 
-`updated_at` is maintained by a trigger.
-
-### `governance.column_classification`
-
-Stores column-level sensitivity and access metadata.
-
-Main columns:
+Allowed severity values:
 
 ```text
-classification_id uuid default uuidv7()
-table_schema
-table_name
-column_name
-data_layer
-classification_level
-contains_personal_data
-contains_health_data
-contains_direct_identifier
-sensitivity_reason
-access_policy
-masking_policy
-created_at
-updated_at
+info
+warning
+error
+critical
 ```
 
-`updated_at` is maintained by a trigger.
+Allowed status values:
 
-### `governance.source_system_registry`
+```text
+passed
+warning
+failed
+skipped
+```
 
-Registers external source identity, dataset version, source access model,
-sensitivity flags, internal platform access policy, and operational status.
+`data_layer` intentionally accepts both lakehouse scopes (`bronze`, `silver`,
+`gold`) and PostgreSQL/data-product scopes (`raw`, `staging`, `warehouse`,
+`mart`, `ops`, `quality`, `governance`) because quality results can describe
+both systems.
 
-Current Sleep-EDF policy:
+## 6. Implemented Governance Tables
+
+```text
+governance.source_system_registry
+governance.data_contract_registry
+governance.column_classification
+```
+
+`source_system_registry` separates external access from internal policy:
 
 ```text
 access_model = open
@@ -201,60 +199,11 @@ access_policy = restricted
 status = active
 ```
 
-External open access and internal patient-level access are intentionally separate concepts.
+`data_contract_registry` stores versioned contract metadata.
+`column_classification` stores personal/health-data flags, access policy, and
+masking guidance.
 
-### Current Silver staging tables
-
-```text
-staging.silver_recordings
-staging.silver_channels
-staging.silver_sleep_stage_intervals
-staging.silver_sleep_stage_epochs
-```
-
-These are current landing tables for low-volume Silver metadata and epochs.
-A corrective identity/version-lineage migration is planned before the production
-Silver-to-staging loader is enabled.
-
-## Current Governance Coverage
-
-| Table | Classified Columns |
-|---|---:|
-| `ops.pipeline_run` | 14 |
-| `ops.file_attempt` | 17 |
-| `quality.quarantine_records` | 16 |
-| `raw.file_registry` | 13 |
-| `governance.source_system_registry` | 18 |
-| `staging.silver_recordings` | 13 |
-| `staging.silver_channels` | 13 |
-| `staging.silver_sleep_stage_intervals` | 9 |
-| `staging.silver_sleep_stage_epochs` | 10 |
-
-## SQL Execution
-
-SQL files are split into:
-
-```text
-scripts/sql/migrations
-scripts/sql/seeds
-scripts/sql/manual
-```
-
-Only files listed in this manifest are executed by the runner:
-
-```text
-scripts/sql/migrations_manifest.txt
-```
-
-Run migrations:
-
-```bash
-./scripts/run_sql_migrations.sh
-```
-
-## Data Layer Vocabulary
-
-In governance tables, `data_layer` refers to database/data-product layers:
+In governance tables, `data_layer` uses PostgreSQL/data-product vocabulary:
 
 ```text
 raw
@@ -266,4 +215,155 @@ quality
 governance
 ```
 
-It is not the same thing as MinIO bucket names such as `bronze`, `silver`, or `gold`.
+## 7. Current Silver Staging Tables
+
+```text
+staging.silver_recordings
+staging.silver_channels
+staging.silver_sleep_stage_intervals
+staging.silver_sleep_stage_epochs
+```
+
+The local tables currently contain zero rows because the production loader has
+not been implemented.
+
+### `staging.silver_recordings`
+
+Grain: one concrete versioned Silver recording representation.
+
+Primary key:
+
+```text
+recording_id
+```
+
+Version-aware unique identity:
+
+```text
+source_system
++ source_pair_id
++ input_fingerprint
++ schema_version
++ transform_version
++ config_id
+```
+
+Unique output location:
+
+```text
+silver_bucket
++ silver_output_prefix
+```
+
+Lineage foreign keys:
+
+```text
+psg_file_id          -> raw.file_registry.file_id
+hypnogram_file_id    -> raw.file_registry.file_id
+staging_load_run_id  -> ops.pipeline_run.run_id
+```
+
+Migration `025_correct_staging_silver_identity_and_lineage.sql` has already
+implemented this design. It also removed the obsolete source-path-only
+uniqueness rule and permits negative source interval onset values.
+
+### `staging.silver_channels`
+
+Grain: one channel in one concrete Silver recording representation.
+
+### `staging.silver_sleep_stage_intervals`
+
+Grain: one source annotation interval in one concrete Silver representation.
+Negative `onset_seconds` is allowed because a source annotation may begin before
+the PSG boundary.
+
+### `staging.silver_sleep_stage_epochs`
+
+Grain: one emitted 30-second epoch in one concrete Silver representation.
+Epoch timeline positions remain non-negative and limited to the emitted PSG
+range.
+
+## 8. Missing Phase 6 Staging Tables
+
+The subject metadata Parquet datasets are implemented, but relational landing
+tables are not:
+
+```text
+staging.silver_subjects
+staging.silver_recording_contexts
+```
+
+Their DDL, contracts, classifications, loaders, and smoke tests must be added
+before subject-aware Warehouse models are built.
+
+## 9. Planned Warehouse Core
+
+```text
+warehouse.dim_subject
+warehouse.dim_recording
+warehouse.dim_channel
+warehouse.dim_sleep_stage
+warehouse.fact_sleep_epoch
+```
+
+The exact physical columns and constraints are defined in
+[`data_model.md`](data_model.md) and must be approved through a Warehouse identity
+ADR before implementation.
+
+`warehouse.fact_signal_quality` and device-event tables remain future scope.
+
+## 10. SQL Execution
+
+SQL files are stored in:
+
+```text
+scripts/sql/migrations
+scripts/sql/seeds
+scripts/sql/manual
+```
+
+Only files listed in this manifest are executed:
+
+```text
+scripts/sql/migrations_manifest.txt
+```
+
+Run the registered migrations and seeds:
+
+```bash
+make migrate
+```
+
+Equivalent script:
+
+```bash
+./scripts/run_sql_migrations.sh
+```
+
+All migrations and seeds must be idempotent under the project runner.
+
+## 11. Current Migration Baseline
+
+The current manifest includes:
+
+```text
+024_create_staging_silver_tables.sql
+025_correct_staging_silver_identity_and_lineage.sql
+026_create_quality_check_results.sql
+```
+
+Related governance seeds register the active contracts and column
+classifications.
+
+## 12. Phase 6 Migration Rules
+
+New Phase 6 migrations must:
+
+- preserve completed Bronze and Silver behavior;
+- define grain and keys before columns are finalized;
+- use foreign keys where parent rows are guaranteed;
+- retain source and Silver lineage alongside Warehouse surrogate keys;
+- support idempotent loads;
+- include contracts and column classification;
+- add focused smoke tests;
+- pass `git diff --check` and the full regression suite before commit.
