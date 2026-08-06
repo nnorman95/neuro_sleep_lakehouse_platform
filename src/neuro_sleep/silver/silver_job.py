@@ -297,6 +297,13 @@ def run_tracked_silver_job(
             output_prefix=(
                 pipeline_result.output_prefix
             ),
+            source_pair_id=(
+                pipeline_result.source_pair_id
+            ),
+            input_fingerprint=(
+                pipeline_result
+                .input_fingerprint
+            ),
             rows_written=(
                 pipeline_result.row_count
                 if pipeline_result.status

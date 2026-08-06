@@ -7,6 +7,9 @@ from neuro_sleep.silver.idempotency import (
     build_idempotent_output_prefix,
     build_source_pair_id,
 )
+from neuro_sleep.silver.source_lineage import (
+    resolve_silver_source_lineage,
+)
 from neuro_sleep.silver.silver_pipeline import (
     run_silver_pipeline,
 )
@@ -45,6 +48,19 @@ def build_smoke_output_prefix(
         ),
     )
 
+    source_lineage = (
+        resolve_silver_source_lineage(
+            psg_bucket=BRONZE_BUCKET,
+            psg_object_key=PSG_OBJECT_KEY,
+            hypnogram_bucket=(
+                BRONZE_BUCKET
+            ),
+            hypnogram_object_key=(
+                HYPNOGRAM_OBJECT_KEY
+            ),
+        )
+    )
+
     config_id = build_config_id(
         signal_chunk_duration_seconds=30.0,
         signal_start_seconds=0.0,
@@ -54,6 +70,9 @@ def build_smoke_output_prefix(
     return build_idempotent_output_prefix(
         root_prefix=root_prefix,
         source_pair_id=source_pair_id,
+        input_fingerprint=(
+            source_lineage.input_fingerprint
+        ),
         config_id=config_id,
     )
 

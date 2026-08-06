@@ -17,6 +17,12 @@ from neuro_sleep.silver.parquet_schemas import (
 from neuro_sleep.silver.signal_extractor import (
     DEFAULT_CHUNK_DURATION_SECONDS,
 )
+from neuro_sleep.silver.source_lineage import (
+    SilverSourceLineage,
+    build_source_pair_id,
+    canonical_source_pair_text,
+    resolve_silver_source_lineage,
+)
 from neuro_sleep.silver.silver_recording_writer import (
     QualityReportHandler,
     SilverRecordingWriteResult,
@@ -29,7 +35,7 @@ from neuro_sleep.storage.object_storage import (
 )
 
 
-SILVER_TRANSFORM_VERSION = "1.0.0"
+SILVER_TRANSFORM_VERSION = "1.1.0"
 SUCCESS_OBJECT_NAME = "_SUCCESS.json"
 SUCCESS_CONTENT_TYPE = "application/json"
 
@@ -49,8 +55,14 @@ class PartialSilverOutputError(
 class SilverIdempotentWriteResult:
     status: IdempotencyStatus
     source_pair_id: str
+    input_fingerprint: str
     config_id: str
     output_prefix: str
+
+    psg_file_id: UUID
+    hypnogram_file_id: UUID
+    psg_checksum_sha256: str
+    hypnogram_checksum_sha256: str
 
     data_object_count: int
     total_object_count: int
@@ -67,52 +79,6 @@ class SilverIdempotentWriteResult:
     @property
     def skipped(self) -> bool:
         return self.status == "skipped"
-
-
-def canonical_source_pair_text(
-    psg_bucket: str,
-    psg_object_key: str,
-    hypnogram_bucket: str,
-    hypnogram_object_key: str,
-) -> str:
-    return "\n".join(
-        (
-            f"psg_bucket={psg_bucket}",
-            f"psg_object_key={psg_object_key}",
-            (
-                "hypnogram_bucket="
-                f"{hypnogram_bucket}"
-            ),
-            (
-                "hypnogram_object_key="
-                f"{hypnogram_object_key}"
-            ),
-        )
-    )
-
-
-def build_source_pair_id(
-    psg_bucket: str,
-    psg_object_key: str,
-    hypnogram_bucket: str,
-    hypnogram_object_key: str,
-) -> str:
-    canonical_text = (
-        canonical_source_pair_text(
-            psg_bucket=psg_bucket,
-            psg_object_key=psg_object_key,
-            hypnogram_bucket=(
-                hypnogram_bucket
-            ),
-            hypnogram_object_key=(
-                hypnogram_object_key
-            ),
-        )
-    )
-
-    return sha256(
-        canonical_text.encode("utf-8")
-    ).hexdigest()
 
 
 def canonical_transform_config_text(
@@ -188,6 +154,7 @@ def build_config_id(
 def build_idempotent_output_prefix(
     root_prefix: str,
     source_pair_id: str,
+    input_fingerprint: str,
     config_id: str,
 ) -> str:
     cleaned_root = validate_output_prefix(
@@ -200,6 +167,8 @@ def build_idempotent_output_prefix(
         "transform_version="
         f"{SILVER_TRANSFORM_VERSION}/"
         f"source_pair_id={source_pair_id}/"
+        "input_fingerprint="
+        f"{input_fingerprint}/"
         f"config_id={config_id}"
     )
 
@@ -319,7 +288,7 @@ def build_success_manifest(
     write_result: (
         SilverRecordingWriteResult
     ),
-    source_pair_id: str,
+    source_lineage: SilverSourceLineage,
     config_id: str,
     psg_bucket: str,
     psg_object_key: str,
@@ -341,12 +310,27 @@ def build_success_manifest(
         "transform_version": (
             SILVER_TRANSFORM_VERSION
         ),
-        "source_pair_id": source_pair_id,
+        "source_pair_id": (
+            source_lineage.source_pair_id
+        ),
+        "input_fingerprint": (
+            source_lineage.input_fingerprint
+        ),
         "config_id": config_id,
         "recording_id": str(
             write_result.bundle.recording_id
         ),
         "source": {
+            "source_system": (
+                source_lineage.source_system
+            ),
+            "psg_file_id": str(
+                source_lineage.psg_file_id
+            ),
+            "hypnogram_file_id": str(
+                source_lineage
+                .hypnogram_file_id
+            ),
             "psg_bucket": psg_bucket,
             "psg_object_key": (
                 psg_object_key
@@ -356,6 +340,14 @@ def build_success_manifest(
             ),
             "hypnogram_object_key": (
                 hypnogram_object_key
+            ),
+            "psg_checksum_sha256": (
+                source_lineage
+                .psg_checksum_sha256
+            ),
+            "hypnogram_checksum_sha256": (
+                source_lineage
+                .hypnogram_checksum_sha256
             ),
         },
         "transform_config": {
@@ -463,6 +455,13 @@ def upload_success_manifest(
                         ]
                     )
                 ),
+                "input_fingerprint": (
+                    str(
+                        manifest[
+                            "input_fingerprint"
+                        ]
+                    )
+                ),
                 "config_id": (
                     str(
                         manifest[
@@ -526,7 +525,7 @@ def read_success_manifest(
 
 def validate_existing_manifest(
     manifest: dict[str, object],
-    source_pair_id: str,
+    source_lineage: SilverSourceLineage,
     config_id: str,
 ) -> UUID:
     if manifest.get("status") != (
@@ -539,11 +538,50 @@ def validate_existing_manifest(
 
     if (
         manifest.get("source_pair_id")
-        != source_pair_id
+        != source_lineage.source_pair_id
     ):
         raise ValueError(
             "Silver success manifest source "
             "pair does not match"
+        )
+
+    if (
+        manifest.get("input_fingerprint")
+        != source_lineage.input_fingerprint
+    ):
+        raise ValueError(
+            "Silver success manifest input "
+            "fingerprint does not match"
+        )
+
+    source = manifest.get("source")
+
+    if not isinstance(source, dict):
+        raise ValueError(
+            "Silver success manifest source "
+            "lineage is invalid"
+        )
+
+    if (
+        source.get("psg_checksum_sha256")
+        != source_lineage
+        .psg_checksum_sha256
+    ):
+        raise ValueError(
+            "Silver success manifest PSG "
+            "checksum does not match"
+        )
+
+    if (
+        source.get(
+            "hypnogram_checksum_sha256"
+        )
+        != source_lineage
+        .hypnogram_checksum_sha256
+    ):
+        raise ValueError(
+            "Silver success manifest "
+            "Hypnogram checksum does not match"
         )
 
     if (
@@ -608,15 +646,25 @@ def write_silver_recording_idempotent(
     ) = None,
     client: BaseClient | None = None,
 ) -> SilverIdempotentWriteResult:
-    source_pair_id = build_source_pair_id(
-        psg_bucket=psg_bucket,
-        psg_object_key=psg_object_key,
-        hypnogram_bucket=(
-            hypnogram_bucket
-        ),
-        hypnogram_object_key=(
-            hypnogram_object_key
-        ),
+    source_lineage = (
+        resolve_silver_source_lineage(
+            psg_bucket=psg_bucket,
+            psg_object_key=psg_object_key,
+            hypnogram_bucket=(
+                hypnogram_bucket
+            ),
+            hypnogram_object_key=(
+                hypnogram_object_key
+            ),
+        )
+    )
+
+    source_pair_id = (
+        source_lineage.source_pair_id
+    )
+
+    input_fingerprint = (
+        source_lineage.input_fingerprint
     )
 
     config_id = build_config_id(
@@ -635,6 +683,9 @@ def write_silver_recording_idempotent(
         build_idempotent_output_prefix(
             root_prefix=root_prefix,
             source_pair_id=source_pair_id,
+            input_fingerprint=(
+                input_fingerprint
+            ),
             config_id=config_id,
         )
     )
@@ -685,8 +736,8 @@ def write_silver_recording_idempotent(
             recording_id = (
                 validate_existing_manifest(
                     manifest=manifest,
-                    source_pair_id=(
-                        source_pair_id
+                    source_lineage=(
+                        source_lineage
                     ),
                     config_id=config_id,
                 )
@@ -718,7 +769,25 @@ def write_silver_recording_idempotent(
                     source_pair_id=(
                         source_pair_id
                     ),
+                    input_fingerprint=(
+                        input_fingerprint
+                    ),
                     config_id=config_id,
+                    psg_file_id=(
+                        source_lineage.psg_file_id
+                    ),
+                    hypnogram_file_id=(
+                        source_lineage
+                        .hypnogram_file_id
+                    ),
+                    psg_checksum_sha256=(
+                        source_lineage
+                        .psg_checksum_sha256
+                    ),
+                    hypnogram_checksum_sha256=(
+                        source_lineage
+                        .hypnogram_checksum_sha256
+                    ),
                     output_prefix=(
                         output_prefix
                     ),
@@ -790,7 +859,7 @@ def write_silver_recording_idempotent(
 
         manifest = build_success_manifest(
             write_result=write_result,
-            source_pair_id=source_pair_id,
+            source_lineage=source_lineage,
             config_id=config_id,
             psg_bucket=psg_bucket,
             psg_object_key=psg_object_key,
@@ -837,7 +906,25 @@ def write_silver_recording_idempotent(
             source_pair_id=(
                 source_pair_id
             ),
+            input_fingerprint=(
+                input_fingerprint
+            ),
             config_id=config_id,
+            psg_file_id=(
+                source_lineage.psg_file_id
+            ),
+            hypnogram_file_id=(
+                source_lineage
+                .hypnogram_file_id
+            ),
+            psg_checksum_sha256=(
+                source_lineage
+                .psg_checksum_sha256
+            ),
+            hypnogram_checksum_sha256=(
+                source_lineage
+                .hypnogram_checksum_sha256
+            ),
             output_prefix=(
                 output_prefix
             ),

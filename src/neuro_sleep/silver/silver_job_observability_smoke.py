@@ -57,6 +57,8 @@ def build_pipeline_result(
 ):
     return SimpleNamespace(
         status=status,
+        source_pair_id="smoke-source-pair-id",
+        input_fingerprint="smoke-input-fingerprint",
         recording_id=new_uuid7(),
         output_prefix=(
             "smoke-tests/silver-job/"
