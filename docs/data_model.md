@@ -1,229 +1,56 @@
 # Data Model
 
-This document describes the evolving data model for the NeuroSleep Lakehouse Platform. It preserves the original analytical design while distinguishing clearly between implemented structures and future models.
+This document defines the current and planned data model for the NeuroSleep Lakehouse Platform at the start of **Phase 6: Warehouse Modeling**.
 
-The model separates subjects, recordings, channels, sleep epochs, signal quality records, pipeline runs, file metadata, and quarantine records into different tables. This reduces duplication, improves data integrity, and makes relationships between entities clearer.
+It separates three states clearly:
 
-The design uses two modeling styles:
+- **implemented** structures in Bronze, Silver, MinIO, and PostgreSQL;
+- the **Warehouse Core** to be built in Phase 6;
+- **future scope** that must not be implemented before a trusted upstream dataset exists.
 
-- Normalized modeling for metadata, operational, quality, and governance tables.
-- Dimensional modeling for analytical warehouse and mart tables.
+The platform uses normalized relational modeling for operational, quality, governance, and staging data, and dimensional modeling for analytical warehouse and mart data.
 
-## 1. Core Entity Relationships
+## 1. Modeling Principles
 
-```text
-subject
--> recording
--> channel
--> sleep_epoch
+1. Define table grain before defining columns.
+2. Keep logical source identity separate from concrete processed versions.
+3. Preserve Bronze and Silver lineage in PostgreSQL.
+4. Use warehouse surrogate keys without discarding source and Silver identifiers.
+5. Keep source-preserving values available when analytical mappings are added.
+6. Make every load idempotent and testable.
+7. Keep high-volume signal samples in Parquet instead of PostgreSQL row by row.
+8. Do not create facts before their trusted upstream datasets exist.
+9. Treat subject-level sleep data as restricted even though Sleep-EDF is open access.
+10. Avoid additional tables that do not serve the current project scope.
 
-recording
--> signal_quality
+## 2. Implemented Upstream Structures
 
-source_file
--> recording_metadata
-source_file
--> channel_metadata
-source_file
--> quarantine_record
-```
+### 2.1 Bronze, operations, quality, and governance
 
-Meaning:
-
-- One subject can have many recordings.
-- One recording can have many channels.
-- One recording can have many sleep epochs.
-- One recording can have many signal quality windows.
-- One source file can create metadata records.
-- Bad records should link back to the source file when possible.
-
-## 2. First Logical ERD
-
-```mermaid
-erDiagram
-    SUBJECT ||--o{ RECORDING : has
-    RECORDING ||--o{ CHANNEL : contains
-    RECORDING ||--o{ SLEEP_EPOCH : has
-    CHANNEL ||--o{ SIGNAL_QUALITY : measured_for
-    SOURCE_FILE ||--o{ QUARANTINE_RECORD : can_create
-```
-
-This is the first logical model. The final physical database can use slightly different table names depending on the layer.
-
-## 3. Core Entities
-
-| Entity         | Meaning                                      | Example Table                       |
-|----------------|----------------------------------------------|-------------------------------------|
-| source_file    | A raw file received from a source system      | raw.file_registry                   |
-| subject        | A person or anonymized participant            | warehouse.dim_subject               |
-| recording      | One sleep/EEG recording session               | warehouse.dim_recording             |
-| channel        | One EEG or signal channel inside a recording  | warehouse.dim_channel               |
-| sleep_epoch    | One sleep stage interval                      | warehouse.fact_sleep_epoch          |
-| signal_quality | Quality metrics for signal windows            | warehouse.fact_signal_quality       |
-| pipeline_run   | One execution of a pipeline step              | ops.pipeline_run                    |
-| quarantine     | Rejected or suspicious records                | quality.quarantine_records          |
-| data_contract  | Expected structure of an important table      | governance.data_contract_registry   |
-
-## 4. Table Grain
-
-Grain means what one row represents.
-
-| Table                         | Grain                                                     |
-|-------------------------------|-----------------------------------------------------------|
-| raw.file_registry             | One row per ingested source file                          |
-| raw.recording_metadata        | One row per extracted recording metadata record           |
-| raw.channel_metadata          | One row per extracted channel metadata record             |
-| warehouse.dim_subject         | One row per subject                                       |
-| warehouse.dim_recording       | One row per recording                                     |
-| warehouse.dim_channel         | One row per channel in a recording                        |
-| warehouse.dim_sleep_stage     | One row per standardized sleep stage                      |
-| warehouse.fact_sleep_epoch    | One row per sleep epoch                                   |
-| warehouse.fact_signal_quality | One row per signal quality window per channel             |
-| ops.pipeline_run              | One row per pipeline task or run                          |
-| quality.quarantine_records    | One row per rejected or suspicious record                 |
-| mart.mart_sleep_stage_distribution | One row per sleep stage summary grouping             |
-| mart.mart_ml_sleep_stage_features  | One row per ML-ready sleep epoch feature record      |
-
-Defining grain early prevents unclear tables later.
-
-## 5. Key Strategy
-
-The project should use clear primary keys and foreign keys.
-
-| Table                         | Primary Key Candidate       | Important Foreign Keys                  |
-|-------------------------------|-----------------------------|-----------------------------------------|
-| raw.file_registry             | file_id                     | ingestion_run_id                         |
-| raw.recording_metadata        | recording_metadata_id       | source_file_id                           |
-| raw.channel_metadata          | channel_metadata_id         | source_file_id                           |
-| warehouse.dim_subject         | subject_key                 | none                                     |
-| warehouse.dim_recording       | recording_key               | subject_key, source_file_id              |
-| warehouse.dim_channel         | channel_key                 | recording_key                            |
-| warehouse.dim_sleep_stage     | sleep_stage_key             | none                                     |
-| warehouse.fact_sleep_epoch    | epoch_key                   | recording_key, sleep_stage_key           |
-| warehouse.fact_signal_quality | signal_quality_key          | recording_key, channel_key               |
-| ops.pipeline_run              | run_id                      | none                                     |
-| quality.quarantine_records    | quarantine_id               | source_file_id, pipeline_run_id          |
-
-Early project versions can use natural source IDs when convenient, but the analytical warehouse should gradually move toward stable surrogate keys.
-
-## 6. Normalization Strategy
-
-Normalization is used where the system needs strong data integrity.
-
-Normalized areas:
-
-```text
-raw
-ops
-quality
-governance
-some warehouse dimensions
-```
-
-Why:
-
-- Avoid repeating the same subject, recording, or channel metadata in many rows.
-- Make updates safer.
-- Make foreign key relationships clear.
-- Reduce inconsistent values.
-- Make the model easier to extend later.
-
-Example of a bad wide table:
-
-```text
-sleep_epoch_table
-- subject_id
-- subject_age
-- subject_sex
-- recording_id
-- recording_start_time
-- channel_name
-- sleep_stage
-- epoch_start_time
-- epoch_end_time
-```
-
-Problem:
-
-The same subject, recording, and channel values would repeat thousands of times.
-
-Better normalized structure:
-
-```text
-dim_subject
-dim_recording
-dim_channel
-fact_sleep_epoch
-```
-
-The repeated metadata is separated from the high-volume fact rows.
-
-## 7. Analytical Modeling Strategy
-
-For analytics, the project should use dimensional modeling.
-
-Main fact tables:
-
-```text
-warehouse.fact_sleep_epoch
-warehouse.fact_signal_quality
-warehouse.fact_device_event
-```
-
-Main dimension tables:
-
-```text
-warehouse.dim_subject
-warehouse.dim_recording
-warehouse.dim_channel
-warehouse.dim_sleep_stage
-```
-
-This creates a star-schema style model:
-
-```text
-dim_subject
-    |
-dim_recording
-    |
-fact_sleep_epoch
-    |
-dim_sleep_stage
-```
-
-This is useful because analysts and ML workflows can query the data more easily.
-
-## 8. Layer-Specific Data Models
-
-### Raw Layer
-
-Purpose:
-
-- Preserve metadata from source files.
-- Track where each file came from.
-- Track ingestion status and checksums.
-
-Tables:
+Implemented PostgreSQL structures include:
 
 ```text
 raw.file_registry
-raw.recording_metadata
-raw.channel_metadata
+ops.pipeline_run
+ops.file_attempt
+quality.quarantine_records
+quality.quality_check_results
+governance.source_system_registry
+governance.data_contract_registry
+governance.column_classification
 ```
 
-Raw layer should not pretend that messy source data is clean.
+`raw.file_registry` is the authoritative registry for Bronze source objects. It stores object location, source URL, size, SHA-256 checksum, ingestion run, and status.
 
-### Silver Layer
+`ops.pipeline_run` and `ops.file_attempt` provide run-level and file-level execution history.
 
-Purpose:
+`quality.quarantine_records` stores rejected-record metadata and optional pointers to large payloads in MinIO.
 
-- Clean and standardize data.
-- Validate required values.
-- Preserve source semantics and lineage.
-- Deduplicate/idempotently publish records with clear rules.
-- Keep high-volume signal data in columnar object storage.
+`quality.quality_check_results` stores durable quality-check history for Bronze, Silver, PostgreSQL, and later analytical layers.
 
-Implemented Silver datasets in MinIO:
+### 2.2 Implemented Silver recording datasets
+
+The recording pipeline publishes these versioned Parquet datasets to MinIO Silver:
 
 ```text
 recordings
@@ -233,21 +60,391 @@ sleep_stage_epochs
 signals
 ```
 
-The implemented Silver layer is Parquet-based and uses explicit PyArrow schemas,
-versioned prefixes, quality gates, `_SUCCESS.json`, checksums, and reconciliation.
+They use explicit PyArrow schemas, Zstandard compression, SHA-256 payload checksums, `_SUCCESS.json` manifests, reconciliation, partial-output recovery, and idempotent reruns.
 
-`subjects`, `signal_quality`, and `device_events` are not implemented Silver datasets yet.
-Subject metadata remains a required future addition before the final subject-aware warehouse model is complete.
+| Dataset | Grain | Main identity |
+|---|---|---|
+| `recordings` | One concrete materialized Silver recording version | `recording_id` |
+| `channels` | One channel in one concrete Silver recording version | `channel_id` |
+| `sleep_stage_intervals` | One source annotation interval | `interval_id` |
+| `sleep_stage_epochs` | One emitted 30-second epoch | `epoch_id` |
+| `signals` | One signal sample for one channel | `recording_id + channel_id + sample_index` |
 
-### Warehouse Layer
+#### `recordings`
 
-Purpose:
+```text
+recording_id
+source_system
+psg_bucket
+psg_object_key
+hypnogram_bucket
+hypnogram_object_key
+recording_start
+duration_seconds
+channel_count
+annotation_count
+in_range_epoch_count
+out_of_range_epoch_count
+trailing_overhang_seconds
+```
 
-- Store structured facts and dimensions.
-- Support analytical joins.
-- Keep keys and relationships stable.
+#### `channels`
 
-Tables:
+```text
+channel_id
+recording_id
+position
+source_label
+normalized_name
+sampling_frequency_hz
+physical_dimension
+physical_min
+physical_max
+digital_min
+digital_max
+samples_per_data_record
+prefiltering
+```
+
+#### `sleep_stage_intervals`
+
+```text
+interval_id
+recording_id
+source_annotation_index
+onset_seconds
+duration_seconds
+end_seconds
+source_label
+normalized_stage
+overlap_status
+```
+
+Source annotations may start before the PSG boundary, so interval `onset_seconds` may be negative.
+
+#### `sleep_stage_epochs`
+
+```text
+epoch_id
+recording_id
+source_interval_id
+source_annotation_index
+epoch_number
+start_seconds
+duration_seconds
+end_seconds
+source_label
+normalized_stage
+```
+
+Epochs are recording-level facts, not channel-level facts. Each emitted epoch is exactly 30 seconds.
+
+#### `signals`
+
+```text
+recording_id
+channel_id
+sample_index
+elapsed_seconds
+epoch_number
+signal_value
+```
+
+Signal rows remain in MinIO/Parquet. They are not loaded into PostgreSQL row by row.
+
+### 2.3 Implemented Silver subject metadata
+
+The subject metadata pipeline publishes:
+
+```text
+subjects.parquet
+recording_contexts.parquet
+_SUCCESS.json
+```
+
+Current production output:
+
+```text
+100 subjects
+197 recording contexts
+```
+
+#### `subjects`
+
+Grain: one logical subject in one source collection.
+
+```text
+subject_key
+source_system
+dataset_version
+collection
+source_subject_id
+source_subject_number
+age_years
+sex
+source_bucket
+source_object_key
+```
+
+`subject_key` is a deterministic SHA-256 business key derived from:
+
+```text
+source_system
++ dataset_version
++ collection
++ source_subject_id
+```
+
+It is stable and pseudonymous, but it must not be described as irreversible anonymization.
+
+#### `recording_contexts`
+
+Grain: one source context for one logical recording.
+
+```text
+recording_key
+subject_key
+source_system
+dataset_version
+collection
+night_number
+lights_off_seconds
+treatment
+source_bucket
+source_object_key
+```
+
+Example logical recording keys:
+
+```text
+SC4001E
+SC4002E
+ST7011J
+```
+
+Night number, lights-off time, and treatment belong to recording context, not to the subject row.
+
+## 3. Identity and Versioning
+
+The platform uses separate identifiers for separate concepts.
+
+| Identifier | Meaning |
+|---|---|
+| `subject_key` | Logical subject within source system, dataset version, and collection |
+| `recording_key` | Logical Sleep-EDF recording or study night |
+| `source_pair_id` | Logical PSG/Hypnogram object pair |
+| `input_fingerprint` | Exact verified PSG/Hypnogram source bytes |
+| `config_id` | Canonical Silver transform configuration |
+| `recording_id` | One concrete materialized Silver recording version |
+
+### 3.1 Logical recording business key
+
+The logical Warehouse recording identity is:
+
+```text
+source_system
++ dataset_version
++ collection
++ recording_key
+```
+
+### 3.2 Version-aware Silver recording grain
+
+One staged Silver recording version is unique by:
+
+```text
+source_system
++ source_pair_id
++ input_fingerprint
++ schema_version
++ transform_version
++ config_id
+```
+
+A changed input fingerprint, schema version, transform version, or configuration produces a different `recording_id`.
+
+### 3.3 Required reconciliation
+
+`recording_key` and `recording_id` are not interchangeable.
+
+The Warehouse path must reconcile:
+
+```text
+recording_key
+-> logical recording context
+-> selected concrete recording_id
+```
+
+This mapping must reuse the existing Sleep-EDF source classification and batch recording identity. It must not depend on ad hoc string slicing in Warehouse SQL.
+
+A Silver recording that cannot be matched to exactly one recording context must fail or be quarantined instead of being loaded as an orphan.
+
+## 4. Current PostgreSQL Staging Model
+
+Implemented tables:
+
+```text
+staging.silver_recordings
+staging.silver_channels
+staging.silver_sleep_stage_intervals
+staging.silver_sleep_stage_epochs
+```
+
+The production Silver-to-staging loader is not implemented yet.
+
+### 4.1 `staging.silver_recordings`
+
+Grain: one version-aware Silver recording publication.
+
+The table preserves:
+
+```text
+recording_id
+source_system
+PSG and Hypnogram object locations
+psg_file_id
+hypnogram_file_id
+source_pair_id
+input_fingerprint
+config_id
+schema_version
+transform_version
+PSG and Hypnogram SHA-256 checksums
+silver_bucket
+silver_output_prefix
+staging_load_run_id
+loaded_at
+recording metadata and row counts
+```
+
+Important uniqueness:
+
+```text
+source_system
++ source_pair_id
++ input_fingerprint
++ schema_version
++ transform_version
++ config_id
+```
+
+```text
+silver_bucket + silver_output_prefix
+```
+
+### 4.2 `staging.silver_channels`
+
+Grain: one channel in one concrete staged Silver recording.
+
+Important uniqueness:
+
+```text
+recording_id + position
+recording_id + normalized_name
+```
+
+### 4.3 `staging.silver_sleep_stage_intervals`
+
+Grain: one source annotation interval in one concrete staged Silver recording.
+
+Important uniqueness:
+
+```text
+recording_id + source_annotation_index
+```
+
+Negative `onset_seconds` is allowed because source annotations may begin before PSG coverage.
+
+### 4.4 `staging.silver_sleep_stage_epochs`
+
+Grain: one emitted 30-second epoch in one concrete staged Silver recording.
+
+Important uniqueness:
+
+```text
+recording_id + epoch_number
+```
+
+Epoch `start_seconds` remains non-negative.
+
+## 5. Required Phase 6 Staging Additions
+
+Two staging tables are required before subject-aware Warehouse models can be built:
+
+```text
+staging.silver_subjects
+staging.silver_recording_contexts
+```
+
+They are not implemented yet.
+
+### 5.1 `staging.silver_subjects`
+
+Grain: one subject row from one versioned Silver metadata publication.
+
+Source fields:
+
+```text
+subject_key
+source_system
+dataset_version
+collection
+source_subject_id
+source_subject_number
+age_years
+sex
+source_bucket
+source_object_key
+```
+
+Required publication lineage:
+
+```text
+metadata_input_fingerprint
+schema_version
+transform_version
+silver_bucket
+silver_output_prefix
+staging_load_run_id
+loaded_at
+```
+
+### 5.2 `staging.silver_recording_contexts`
+
+Grain: one recording context row from one versioned Silver metadata publication.
+
+Source fields:
+
+```text
+recording_key
+subject_key
+source_system
+dataset_version
+collection
+night_number
+lights_off_seconds
+treatment
+source_bucket
+source_object_key
+```
+
+Required publication lineage:
+
+```text
+metadata_input_fingerprint
+schema_version
+transform_version
+silver_bucket
+silver_output_prefix
+staging_load_run_id
+loaded_at
+```
+
+The table must enforce a valid relationship from each context `subject_key` to the corresponding staged subject publication.
+
+## 6. Phase 6 Warehouse Core Target
+
+The proposed Warehouse Core contains:
 
 ```text
 warehouse.dim_subject
@@ -255,303 +452,517 @@ warehouse.dim_recording
 warehouse.dim_channel
 warehouse.dim_sleep_stage
 warehouse.fact_sleep_epoch
-warehouse.fact_signal_quality
-warehouse.fact_device_event
 ```
 
-### Mart Layer
+Staging preserves version-aware Silver history. The intended first Warehouse Core exposes one selected current Silver representation for each logical recording and does not add a separate Warehouse recording-version history table. This rule must be formalized in the Warehouse grain ADR before physical Warehouse tables are created.
 
-Purpose:
+If a newer approved Silver representation replaces the selected version, dependent channel and epoch rows must be replaced transactionally and idempotently.
 
-- Serve final business, analytics, and ML-ready tables.
-- Reduce the number of joins needed by end users.
+### 6.1 Logical ERD
 
-Tables:
+```mermaid
+erDiagram
+    DIM_SUBJECT ||--o{ DIM_RECORDING : has
+    DIM_RECORDING ||--o{ DIM_CHANNEL : contains
+    DIM_RECORDING ||--o{ FACT_SLEEP_EPOCH : has
+    DIM_SLEEP_STAGE ||--o{ FACT_SLEEP_EPOCH : classifies
+```
+
+### 6.2 Proposed Warehouse grain
+
+| Table | Grain |
+|---|---|
+| `warehouse.dim_subject` | One row per logical subject |
+| `warehouse.dim_recording` | One row per logical recording with one selected current Silver representation |
+| `warehouse.dim_channel` | One row per channel in the selected recording representation |
+| `warehouse.dim_sleep_stage` | One row per source-preserving normalized Silver stage code |
+| `warehouse.fact_sleep_epoch` | One row per emitted 30-second epoch in the selected recording representation |
+
+### 6.3 Key strategy
+
+Warehouse surrogate keys use `_sk` so they are not confused with source, operational, or deterministic keys.
+
+| Table | Warehouse key | Preserved identity |
+|---|---|---|
+| `warehouse.dim_subject` | `subject_sk` | `subject_key` |
+| `warehouse.dim_recording` | `recording_sk` | `recording_key`, `silver_recording_id` |
+| `warehouse.dim_channel` | `channel_sk` | `silver_channel_id` |
+| `warehouse.dim_sleep_stage` | `sleep_stage_sk` | `silver_stage_code` |
+| `warehouse.fact_sleep_epoch` | `silver_epoch_id` can serve as fact identity | `silver_recording_id`, `epoch_number` |
+
+Surrogate keys never replace lineage fields.
+
+## 7. Proposed Warehouse Table Designs
+
+Exact SQL types, defaults, and constraint names will be defined in migrations and data contracts.
+
+### 7.1 `warehouse.dim_subject`
+
+Grain: one logical subject.
+
+Candidate columns:
+
+```text
+subject_sk
+subject_key
+source_system
+dataset_version
+collection
+age_years
+sex
+source_subject_id
+source_subject_number
+source_bucket
+source_object_key
+metadata_input_fingerprint
+first_loaded_at
+last_loaded_at
+```
+
+Rules:
+
+- `subject_key` is unique.
+- `subject_sk` is the Warehouse surrogate key.
+- Source subject identifiers remain restricted lineage fields.
+- Broad marts use `subject_sk` or aggregated outputs and do not expose source identifiers by default.
+
+### 7.2 `warehouse.dim_recording`
+
+Grain: one logical recording with one selected current Silver representation.
+
+Candidate columns:
+
+```text
+recording_sk
+recording_key
+subject_sk
+source_system
+dataset_version
+collection
+night_number
+lights_off_seconds
+treatment
+silver_recording_id
+recording_start
+duration_seconds
+channel_count
+annotation_count
+in_range_epoch_count
+out_of_range_epoch_count
+trailing_overhang_seconds
+psg_file_id
+hypnogram_file_id
+source_pair_id
+input_fingerprint
+config_id
+schema_version
+transform_version
+psg_checksum_sha256
+hypnogram_checksum_sha256
+silver_bucket
+silver_output_prefix
+staging_load_run_id
+first_loaded_at
+last_loaded_at
+```
+
+Rules:
+
+- Logical business key:
+
+  ```text
+  source_system + dataset_version + collection + recording_key
+  ```
+
+- `recording_sk` remains the Warehouse surrogate key.
+- `silver_recording_id` identifies the selected concrete Silver version.
+- Subject and recording context must resolve before loading.
+- `psg_file_id` and `hypnogram_file_id` preserve lineage to `raw.file_registry`.
+- `silver_bucket` and `silver_output_prefix` preserve lineage to Silver Parquet objects.
+- Recording-context attributes belong in this dimension because the relationship is one-to-one with the logical recording.
+
+### 7.3 `warehouse.dim_channel`
+
+Grain: one channel in the selected representation of one logical recording.
+
+Candidate columns:
+
+```text
+channel_sk
+recording_sk
+silver_channel_id
+silver_recording_id
+position
+source_label
+normalized_name
+sampling_frequency_hz
+physical_dimension
+physical_min
+physical_max
+digital_min
+digital_max
+samples_per_data_record
+prefiltering
+first_loaded_at
+last_loaded_at
+```
+
+Rules:
+
+- `silver_channel_id` is preserved and unique.
+- `recording_sk + position` is unique.
+- `recording_sk + normalized_name` is unique.
+- A channel must reference the same selected Silver version as its parent recording.
+
+### 7.4 `warehouse.dim_sleep_stage`
+
+Grain: one source-preserving normalized Silver stage code.
+
+Candidate columns:
+
+```text
+sleep_stage_sk
+silver_stage_code
+analytical_stage_code
+display_name
+display_order
+is_sleep
+is_scored_sleep
+```
+
+Expected mapping:
+
+| `silver_stage_code` | `analytical_stage_code` |
+|---|---|
+| `W` | `W` |
+| `N1` | `N1` |
+| `N2` | `N2` |
+| `N3` | `N3` |
+| `N4` | `N3` |
+| `REM` | `REM` |
+| `UNKNOWN` | `UNKNOWN` |
+| `MOVEMENT` | `MOVEMENT` |
+
+This preserves source Stage 3 and Stage 4 while allowing AASM-style analytical grouping. `UNKNOWN` and `MOVEMENT` stay explicit and are not silently treated as ordinary scored sleep.
+
+### 7.5 `warehouse.fact_sleep_epoch`
+
+Grain: one emitted 30-second epoch in the selected Silver recording representation.
+
+Candidate columns:
+
+```text
+silver_epoch_id
+recording_sk
+sleep_stage_sk
+silver_recording_id
+source_interval_id
+source_annotation_index
+epoch_number
+start_seconds
+duration_seconds
+end_seconds
+source_label
+silver_stage_code
+staging_load_run_id
+loaded_at
+```
+
+Rules:
+
+- `silver_epoch_id` preserves exact Silver epoch identity.
+- `recording_sk + epoch_number` is unique in the current Warehouse state.
+- `silver_recording_id + epoch_number` is unique.
+- `duration_seconds = 30.0`.
+- `start_seconds >= 0`.
+- `end_seconds > start_seconds`.
+- Every epoch resolves to one recording and one sleep-stage row.
+- Epochs are not multiplied by channel.
+- `source_interval_id` and `source_annotation_index` preserve annotation lineage.
+
+## 8. Sleep-EDF Coverage Semantics
+
+### Sleep Cassette
+
+- Annotation intervals are expanded into 30-second epochs.
+- Intervals outside PSG coverage do not produce in-range epoch facts.
+- Source labels and normalized stages remain traceable.
+
+### Sleep Telemetry
+
+- Non-30-second-aligned recording duration is a warning.
+- An unannotated PSG tail is a warning.
+- A real epoch extending beyond PSG coverage is an error.
+- The complete PSG signal remains in MinIO.
+- Only real annotation-derived emitted epochs enter `warehouse.fact_sleep_epoch`.
+
+Warnings remain in `quality.quality_check_results`; they are not converted into fabricated epoch rows.
+
+## 9. Lineage
+
+### Recording and epoch lineage
+
+```text
+warehouse.fact_sleep_epoch
+-> warehouse.dim_recording
+-> staging.silver_recordings
+-> raw.file_registry
+-> Bronze PSG/Hypnogram objects
+```
+
+### Silver object lineage
+
+```text
+warehouse.dim_recording
+-> silver_bucket + silver_output_prefix
+-> versioned Silver Parquet objects
+-> _SUCCESS.json
+```
+
+### Subject metadata lineage
+
+```text
+warehouse.dim_subject
+-> staging.silver_subjects
+-> source_bucket + source_object_key
+-> SC-subjects.xls or ST-subjects.xls
+```
+
+Important lineage values include:
+
+```text
+source_system
+dataset_version
+collection
+subject_key
+recording_key
+silver_recording_id
+silver_channel_id
+silver_epoch_id
+source_pair_id
+input_fingerprint
+config_id
+schema_version
+transform_version
+psg_file_id
+hypnogram_file_id
+source checksums
+silver_bucket
+silver_output_prefix
+staging_load_run_id
+loaded_at
+```
+
+## 10. Data Quality and Referential Rules
+
+### Subjects
+
+- `subject_key` is non-null and unique.
+- `age_years` is valid for the accepted source range.
+- `sex` is `F` or `M`.
+- Source and publication lineage is present.
+
+### Recordings
+
+- Every recording resolves to exactly one subject and one recording context.
+- Every selected Silver recording has valid PSG and Hypnogram registry rows.
+- Duration is positive and counts are non-negative.
+- Logical recording business keys are unique in the current Warehouse state.
+- One `silver_recording_id` cannot map to multiple logical recordings.
+
+### Channels
+
+- Every channel resolves to one recording.
+- Position and sampling frequency are positive.
+- Physical and digital ranges are valid.
+- Position and normalized name are unique within a recording.
+
+### Sleep stages
+
+- Every normalized stage resolves to `dim_sleep_stage`.
+- Unsupported labels fail the load.
+- `UNKNOWN` and `MOVEMENT` remain explicit.
+
+### Epochs
+
+- Every epoch resolves to one recording and one sleep stage.
+- Epoch number and start time are non-negative.
+- Duration is exactly 30 seconds.
+- Epoch numbers are unique within a recording.
+- Epochs do not exceed allowed PSG coverage.
+
+### Idempotency
+
+- Re-running the same staging load inserts no duplicates.
+- Re-running Warehouse transformations creates no duplicate dimensions or facts.
+- Replacing the selected Silver version is transactional.
+- A failed replacement leaves the previous valid Warehouse state intact.
+
+## 11. Privacy and Access Boundary
+
+Sleep-EDF is open-access, but subject-level sleep data remains restricted inside the platform.
+
+Quasi-identifying values include:
+
+```text
+source_subject_id
+source_subject_number
+age_years
+sex
+recording dates and times
+collection
+night and treatment context
+```
+
+Rules:
+
+- Use `subject_sk` as the default analytical identifier.
+- Preserve `subject_key` for controlled stable joins.
+- Keep `source_subject_id` and `source_subject_number` in restricted lineage-oriented models.
+- Do not expose source identifiers in broad marts unless specifically required.
+- Do not claim that deterministic SHA-256 subject keys provide irreversible anonymization.
+- Public Git contains code, configuration examples, contracts, and documentation only.
+
+## 12. Load and Transformation Path
+
+Intended flow:
+
+```text
+MinIO Silver Parquet
+-> Python staging loader
+-> PostgreSQL staging.silver_*
+-> dbt sources and tests
+-> dbt Warehouse dimensions and facts
+-> marts after Warehouse Core stabilization
+```
+
+### Python staging loader responsibilities
+
+- discover completed publications through `_SUCCESS.json`;
+- verify object paths, sizes, checksums, schemas, and row counts;
+- load Parquet rows into PostgreSQL staging;
+- preserve publication lineage;
+- track execution in `ops.pipeline_run`;
+- use transactional and idempotent behavior.
+
+### dbt responsibilities
+
+- declare PostgreSQL staging sources;
+- test uniqueness, non-null values, accepted values, and relationships;
+- reconcile logical recording keys with selected concrete Silver versions;
+- build dimensions and facts;
+- prevent duplicate current analytical representations.
+
+Implementation order:
+
+```text
+1. approve Warehouse grain and identity rules
+2. create subject/context staging DDL and contracts
+3. implement the Silver-to-staging loader
+4. create dbt project, sources, and tests
+5. build Warehouse Core models
+6. validate idempotency, lineage, and row counts
+7. create marts and Gold outputs later
+```
+
+## 13. Deferred Models
+
+These models are not part of Warehouse Core.
+
+### `warehouse.fact_signal_quality`
+
+Deferred until a trusted signal-quality dataset exists with an explicit per-channel window grain and defined metrics.
+
+Pipeline quality warnings in `quality.quality_check_results` are not equivalent to analytical signal-quality windows.
+
+### `warehouse.fact_device_event`
+
+Deferred because no device-event source or Silver dataset exists.
+
+### `warehouse.fact_recording_summary`
+
+Deferred until the core dimensions and epoch fact are stable. It should be derived from Warehouse Core rather than loaded directly from Silver unless a later requirement says otherwise.
+
+### Signal-feature facts
+
+Deferred to Gold or a later feature-processing phase. Future features require their own grain, version, and lineage.
+
+### Warehouse recording-version history
+
+Not required for the first Warehouse Core. Version history remains available in Silver object storage and version-aware staging tables. Add a separate history table only if future analytical requirements justify it.
+
+## 14. Mart Candidates
+
+Marts are not implemented yet.
+
+Candidates:
 
 ```text
 mart.mart_subject_sleep_summary
+mart.mart_recording_sleep_summary
 mart.mart_sleep_stage_distribution
 mart.mart_ml_sleep_stage_features
 ```
 
-Marts can be less normalized than raw or operational tables because they are built for reading and analysis.
+Each mart must define its grain before implementation. ML-ready tables must also document feature versions, subject-based data splitting, and leakage prevention.
 
-## 9. Planned Important Columns
+## 15. Naming Conventions
 
-### raw.file_registry
-
-```text
-file_id
-source_system
-source_url
-bucket
-object_key
-file_name
-file_type
-file_size_bytes
-checksum_sha256
-ingested_at
-ingestion_run_id
-status
-```
-
-### warehouse.dim_subject
-
-```text
-subject_key
-source_subject_id
-age
-sex
-source_system
-first_seen_at
-updated_at
-is_anonymized
-```
-
-### warehouse.dim_recording
-
-```text
-recording_key
-source_recording_id
-subject_key
-recording_start_time
-recording_end_time
-duration_seconds
-source_file_id
-source_system
-loaded_at
-```
-
-### warehouse.dim_channel
-
-```text
-channel_key
-recording_key
-channel_name
-channel_type
-sampling_frequency
-source_system
-loaded_at
-```
-
-### warehouse.fact_sleep_epoch
-
-```text
-epoch_key
-recording_key
-sleep_stage_key
-epoch_start_time
-epoch_end_time
-epoch_duration_sec
-source_annotation_file_id
-pipeline_run_id
-loaded_at
-```
-
-### warehouse.fact_signal_quality
-
-```text
-signal_quality_key
-recording_key
-channel_key
-window_start_time
-window_end_time
-missing_ratio
-noise_score
-artifact_score
-signal_quality_score
-is_usable
-calculated_at
-```
-
-### quality.quarantine_records
-
-```text
-quarantine_id
-source_system
-source_file_id
-record_key
-raw_payload
-error_code
-error_message
-severity
-detected_at
-pipeline_run_id
-status
-```
-
-## 10. Sleep Stage Standardization
-
-Sleep-stage semantics are intentionally different between source-preserving Silver
-and the later analytical warehouse.
-
-Implemented source-preserving Silver values:
-
-```text
-W
-N1
-N2
-N3
-N4
-REM
-UNKNOWN
-MOVEMENT
-```
-
-Silver preserves source Stage 3 and Stage 4 separately.
-
-Planned analytical values:
-
-```text
-W
-N1
-N2
-N3
-REM
-UNKNOWN
-```
-
-At the analytical layer, source-preserving `N3` and `N4` may both map to analytical
-`N3`. `UNKNOWN` and `MOVEMENT` must remain explicit and must never be silently
-treated as ordinary sleep stages.
-
-Possible source values:
-
-```text
-Wake
-W
-Sleep stage W
-NREM 1
-N1
-NREM 2
-N2
-NREM 3
-N3
-REM sleep
-REM
-Movement time
-Unknown
-```
-
-The project should document how every source label maps to the standard label.
-
-Unknown or unsupported labels should not be silently accepted.
-
-## 11. Data Quality Relationships
-
-Quarantine records should connect bad data back to the source.
-
-```text
-quality.quarantine_records.source_file_id
--> raw.file_registry.file_id
-```
-
-Pipeline run information should connect processing failures back to the run.
-
-```text
-quality.quarantine_records.pipeline_run_id
--> ops.pipeline_run.run_id
-```
-
-This helps answer:
-
-- Which file produced bad records?
-- Which pipeline run detected the issue?
-- What rule failed?
-- Was the record rejected, warned, or fixed?
-
-## 12. Data Lineage
-
-Important final tables should preserve lineage columns.
+- lowercase `snake_case`;
+- `dim_` for dimensions;
+- `fact_` for facts;
+- `mart_` for consumption models;
+- `_sk` for Warehouse surrogate keys;
+- `_id` for source, operational, or concrete representation identifiers;
+- preserve `subject_key` and `recording_key` as established business keys;
+- `_at` for timestamps;
+- `_date` for dates;
+- `_seconds` for durations;
+- `_count` for counts;
+- `_sha256` for SHA-256 values.
 
 Examples:
 
 ```text
-source_system
-source_file_id
-pipeline_run_id
-loaded_at
-processed_at
-feature_version
-```
-
-Lineage helps trace a final ML feature row back to the original source file and pipeline run.
-
-## 13. Naming Conventions
-
-Use consistent naming.
-
-General rules:
-
-- Use lowercase names.
-- Use snake_case.
-- Use singular names for dimensions when practical.
-- Use `dim_` prefix for dimensions.
-- Use `fact_` prefix for facts.
-- Use `mart_` prefix for final mart tables.
-- Use `_id` for source or natural identifiers.
-- Use `_key` for warehouse surrogate keys.
-- Use `_at` for timestamps.
-- Use `_date` for dates.
-- Use `_seconds` or `_sec` for durations.
-
-Examples:
-
-```text
+subject_sk
 subject_key
-source_subject_id
-recording_start_time
+recording_sk
+recording_key
+silver_recording_id
+sleep_stage_sk
+input_fingerprint
+loaded_at
 duration_seconds
-processed_at
 ```
-
-## 14. Design Decisions
-
-Current decisions:
-
-| Decision | Choice |
-|----------|--------|
-| Raw source files | Stored unchanged |
-| Operational metadata | More normalized |
-| Analytical warehouse | Star-schema style |
-| Bad records | Stored in quarantine |
-| Final ML table | Built from trusted Silver/Gold data |
-| Subject split | Split by subject, not by row |
-| Implemented Silver storage | Parquet in MinIO |
-| High-volume raw signals | Remain in object storage, not PostgreSQL row-by-row |
-| Warehouse transformations | Planned through dbt after staging stabilization |
-
-## 15. Questions To Revisit Later
-
-Resolved decisions:
-
-- Silver is stored as Parquet in MinIO.
-- Low-volume Silver metadata/epochs may be loaded into PostgreSQL staging.
-- High-volume signal samples remain in object storage.
-- PostgreSQL warehouse/mart models are planned for relational analytics.
-
-Questions still open:
-
-- Should `warehouse` facts live entirely in PostgreSQL or should some high-volume analytical outputs remain object-storage-only?
-- Should `subject_key` be generated in Spark, dbt, or PostgreSQL?
-- Should sleep epochs be stored with one row per epoch only, or one row per epoch per channel?
-- Should signal features be stored in the same ML table or a separate feature table?
-- Should device events join directly to recordings or through sessions?
 
 ## 16. Current Status
 
-Current status:
+Implemented:
 
 ```text
-Bronze implemented
-Silver core implemented
-Full persistent Silver run completed for SC4001E0
-Four cassette PSG/Hypnogram pairs inspected
-Initial staging.silver_* PostgreSQL tables created
-Staging identity/version lineage stabilization in progress
-Subject metadata pipeline not yet implemented
-Warehouse/dbt models not yet implemented
+Bronze ingestion complete for the current scope
+Bronze recovery, reconciliation, locking, and quality history implemented
+Silver recording pipeline implemented and tested
+Four Sleep Cassette recordings written
+One Sleep Telemetry recording written
+116,255,936 production Silver signal rows written
+Silver subjects published with 100 subjects
+Silver recording_contexts published with 197 contexts
+Four recording-related staging tables implemented
+Silver identity and lineage ADR accepted
+Durable quality-check history implemented
+Core, reliability, and Silver smoke suites passing: 53/53
 ```
 
-The original dimensional model remains the target, but physical tables should only be
-created when their upstream trusted datasets and lineage semantics are ready.
+Not implemented yet:
+
+```text
+staging.silver_subjects
+staging.silver_recording_contexts
+production Silver-to-staging loader
+Warehouse Core tables
+dbt project, models, and tests
+mart and Gold models
+```
+
+The next modeling task is to approve the Warehouse grain and identity rules, then implement the missing subject/context staging structures without changing completed Bronze and Silver behavior.

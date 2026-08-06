@@ -1,49 +1,55 @@
-# Sleep-EDF Sample Inspection
+# Sleep-EDF Inspection
 
-## Scope
+## 1. Scope
 
-This inspection covers the four PSG/Hypnogram pairs currently stored in the Bronze layer:
+The current production baseline includes four Sleep Cassette pairs and one
+Sleep Telemetry pair.
+
+Cassette:
 
 - `SC4001E0-PSG.edf` + `SC4001EC-Hypnogram.edf`
 - `SC4002E0-PSG.edf` + `SC4002EC-Hypnogram.edf`
 - `SC4011E0-PSG.edf` + `SC4011EH-Hypnogram.edf`
 - `SC4012E0-PSG.edf` + `SC4012EC-Hypnogram.edf`
 
-The files were read from MinIO with `edfio==0.4.13`.
+Telemetry:
 
-## Main findings
+- `ST7011J0-PSG.edf` + `ST7011JP-Hypnogram.edf`
 
-### PSG structure
+Files are read from MinIO Bronze with `edfio==0.4.13`.
 
-Each PSG file contains seven channels:
+## 2. Cassette PSG Findings
+
+Each inspected Cassette PSG contains seven channels:
 
 | Position | Channel | Sampling frequency | Unit |
 |---:|---|---:|---|
 | 1 | EEG Fpz-Cz | 100 Hz | uV |
 | 2 | EEG Pz-Oz | 100 Hz | uV |
 | 3 | EOG horizontal | 100 Hz | uV |
-| 4 | Resp oro-nasal | 1 Hz | empty |
+| 4 | Resp oro-nasal | 1 Hz | nullable |
 | 5 | EMG submental | 1 Hz | uV |
-| 6 | Temp rectal | 1 Hz | usually DegC |
-| 7 | Event marker | 1 Hz | empty |
+| 6 | Temp rectal | 1 Hz | usually DegC, but nullable |
+| 7 | Event marker | 1 Hz | nullable |
 
-The PSG files do not all have an identical header schema.
+The PSG headers are not globally identical. `SC4012E0-PSG.edf` has an empty
+physical unit for `Temp rectal`, while the other inspected Cassette files use
+`DegC`.
 
-`SC4012E0-PSG.edf` has an empty physical unit for `Temp rectal`, while the other inspected PSG files use `DegC`.
+Therefore channel metadata is stored per recording and physical unit is
+nullable.
 
-Silver processing must therefore store channel metadata per recording and must not assume that units are globally fixed.
+## 3. Cassette Hypnogram Findings
 
-### Hypnogram structure
+Each inspected Cassette Hypnogram is annotation-only:
 
-Each Hypnogram is an annotation-only EDF file:
+- ordinary signal count: `0`;
+- annotations contain onset, duration, and source stage label;
+- annotation durations are multiples of 30 seconds;
+- total annotated duration: 86,400 seconds;
+- total source epoch count after expansion: 2,880.
 
-- ordinary signal count: `0`
-- annotations contain onset, duration, and stage label
-- annotation durations are multiples of 30 seconds
-- total annotated duration is 86,400 seconds
-- total expanded epoch count is 2,880 per Hypnogram
-
-Adjacent equal 30-second sleep-stage epochs are compacted into longer annotation intervals.
+Adjacent equal 30-second stages are compacted into longer source intervals.
 
 Example:
 
@@ -53,164 +59,149 @@ duration=120
 text=Sleep stage 1
 ```
 
-represents four consecutive 30-second epochs with the same stage label.
+This represents four consecutive 30-second epochs. Silver preserves the source
+interval and separately emits derived 30-second epoch rows.
 
-The original interval must be preserved, while a derived 30-second epoch table can be created for analysis.
+## 4. Cassette Pair Results
 
-## Pair-level results
-
-| PSG file | PSG duration (s) | Epochs inside PSG | Epochs outside PSG | Trailing annotation overhang (s) |
+| PSG file | PSG duration (s) | Epochs inside PSG | Epochs outside PSG | Trailing overhang (s) |
 |---|---:|---:|---:|---:|
-| SC4001E0-PSG.edf | 79,500 | 2,650 | 230 | 6,900 |
-| SC4002E0-PSG.edf | 84,900 | 2,830 | 50 | 1,500 |
-| SC4011E0-PSG.edf | 84,060 | 2,802 | 78 | 2,340 |
-| SC4012E0-PSG.edf | 85,500 | 2,850 | 30 | 900 |
+| `SC4001E0-PSG.edf` | 79,500 | 2,650 | 230 | 6,900 |
+| `SC4002E0-PSG.edf` | 84,900 | 2,830 | 50 | 1,500 |
+| `SC4011E0-PSG.edf` | 84,060 | 2,802 | 78 | 2,340 |
+| `SC4012E0-PSG.edf` | 85,500 | 2,850 | 30 | 900 |
 
 For all four pairs:
 
-- PSG and Hypnogram start date/time match
-- Hypnogram annotations overlap the PSG
-- annotation durations are multiples of 30 seconds
-- Hypnogram coverage extends beyond the end of the PSG
-- channel order and sampling frequencies are stable
-- one unit-level schema difference exists
+- PSG and Hypnogram start date/time match;
+- annotations overlap the PSG;
+- source durations are multiples of 30 seconds;
+- Hypnogram coverage extends beyond PSG end;
+- channel order and sampling frequencies are stable;
+- at least one unit-level difference exists.
 
-Silver processing must only attach derived epochs that overlap the PSG duration.
+The out-of-range annotation tail remains observable, but derived epochs outside
+PSG coverage are not joined to signal samples.
 
-Annotations outside the PSG range must not be joined to signal samples, but the overhang must remain observable as a data-quality metric.
+## 5. Telemetry Findings
 
-## Observed stage labels
+The production Telemetry recording is `ST7011J`.
 
-The sample contains:
+Telemetry differs from the inspected Cassette pattern:
 
-- `Sleep stage W`
-- `Sleep stage 1`
-- `Sleep stage 2`
-- `Sleep stage 3`
-- `Sleep stage 4`
-- `Sleep stage R`
-- `Sleep stage ?`
-- `Movement time`
+- recording duration may not align exactly to 30 seconds;
+- the PSG may have a tail without annotation coverage;
+- the complete PSG signal must still be retained;
+- only real annotation-derived epochs are emitted.
 
-Silver must preserve the original source label.
+Quality semantics:
 
-A normalized stage field can be added separately:
+```text
+non-30-second-aligned duration -> warning
+unannotated PSG tail           -> warning
+real epoch extending past PSG  -> error
+```
 
-| Source label | Normalized stage |
+The production output contains:
+
+```text
+14,720,329 signal rows
+104 data objects
+```
+
+## 6. Observed Sleep-Stage Labels
+
+| Source label | Source-preserving normalized value |
 |---|---|
-| Sleep stage W | W |
-| Sleep stage 1 | N1 |
-| Sleep stage 2 | N2 |
-| Sleep stage 3 | N3 |
-| Sleep stage 4 | N4 |
-| Sleep stage R | REM |
-| Sleep stage ? | UNKNOWN |
-| Movement time | MOVEMENT |
+| `Sleep stage W` | `W` |
+| `Sleep stage 1` | `N1` |
+| `Sleep stage 2` | `N2` |
+| `Sleep stage 3` | `N3` |
+| `Sleep stage 4` | `N4` |
+| `Sleep stage R` | `REM` |
+| `Sleep stage ?` | `UNKNOWN` |
+| `Movement time` | `MOVEMENT` |
 
-Stage 3 and Stage 4 must remain distinguishable in the source-preserving Silver representation.
+Stage 3 and Stage 4 remain distinguishable in Silver. A later analytical layer
+may derive an AASM-style mapping where both contribute to analytical `N3`.
 
-A later analytical layer may derive an AASM-style stage where source Stage 3 and Stage 4 are combined into N3.
+## 7. Subject Workbook Findings
 
-## Silver design implications
+`SC-subjects.xls`:
+
+```text
+78 unique subjects
+153 recording contexts
+sex code 1 = F
+sex code 2 = M
+```
+
+`ST-subjects.xls`:
+
+```text
+22 subjects
+44 recording contexts
+sex code 1 = M
+sex code 2 = F
+placebo and temazepam contexts per source row
+```
+
+Combined Silver metadata:
+
+```text
+100 subjects
+197 recording contexts
+```
+
+Night, treatment, and lights-off values belong to recording context, not the
+subject row.
+
+## 8. Silver Design Consequences
 
 ### Recording metadata
 
-Store one row per PSG/Hypnogram pair with:
+Store one row per concrete Silver representation with:
 
-- recording identifier
-- PSG object key
-- Hypnogram object key
-- start date/time
-- PSG duration
-- channel count
-- annotation count
-- in-range epoch count
-- out-of-range epoch count
-- trailing overhang seconds
+- `recording_id`;
+- source PSG/Hypnogram locations;
+- start and duration;
+- channel and annotation counts;
+- in-range and out-of-range epoch counts;
+- overhang/coverage metrics;
+- version and lineage identity.
 
 ### Channel metadata
 
-Store one row per recording and channel with:
+Store one row per concrete recording and channel. Do not assume global channel
+units.
 
-- recording identifier
-- channel position
-- source label
-- sampling frequency
-- physical unit
-- physical range
-- digital range
-- samples per data record
-- prefiltering text
+### Source intervals
 
-The physical unit must be nullable.
+Preserve source onset, duration, label, normalized stage, and PSG overlap
+classification. Source onset can be negative.
 
-### Source annotation intervals
+### Derived epochs
 
-Preserve each original annotation interval with:
+Emit one 30-second row per real annotation-derived epoch inside PSG coverage.
 
-- recording identifier
-- source onset seconds
-- source duration seconds
-- source label
-- interval end seconds
-- overlap status with PSG
+### Signals
 
-### Derived sleep-stage epochs
+Store high-volume samples as chunked Parquet in MinIO. Keep sample-to-channel
+and sample-to-epoch relationships without loading every sample into PostgreSQL.
 
-Create 30-second rows only for epochs that overlap the PSG:
+### Subject context
 
-- recording identifier
-- epoch number
-- epoch start seconds
-- epoch end seconds
-- source stage label
-- normalized stage
-- source annotation index
+Use `subject_key` for logical participants and `recording_key` for logical
+recording/night identity. Keep these separate from concrete Silver
+`recording_id`.
 
-Do not duplicate signal values in this table.
+## 9. Production Totals
 
-### Signal data
-
-Signal samples must be stored by recording and channel because channels have different sampling frequencies.
-
-A suitable Parquet design is:
+Across four Cassette and one Telemetry recording:
 
 ```text
-silver/sleep_edf/signals/
-  recording_id=<recording_id>/
-    channel=<normalized_channel_name>/
-      part-*.parquet
+116,255,936 Silver signal rows
 ```
 
-Each signal dataset should include:
-
-- recording identifier
-- channel identifier
-- sample index
-- elapsed seconds
-- signal value
-- sampling frequency
-- physical unit
-
-## Quality rules derived from inspection
-
-1. PSG and Hypnogram start date/time must match.
-2. Each Hypnogram must contain annotations.
-3. Annotation duration must be positive and divisible by 30 seconds.
-4. Annotation intervals must overlap the PSG.
-5. Out-of-range annotation epochs must be counted and excluded from signal joins.
-6. Channel metadata must be stored per recording.
-7. Missing physical units must be accepted but surfaced as a quality warning.
-8. Original stage labels must be preserved.
-9. Unknown and movement labels must not be silently converted to ordinary sleep stages.
-10. The number of in-range 30-second epochs should equal `PSG duration / 30` when the PSG duration is divisible by 30.
-
-## Inspection status
-
-```text
-pair_count=4
-matching_channel_schema_count=3
-differing_channel_schema_count=1
-temporary_file_cleanup=automatic
-edf_pair_schema_audit_status=success
-```
+The current inspection supports Warehouse modeling but does not imply that the
+entire Sleep-EDF source has been processed.
