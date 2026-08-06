@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from neuro_sleep.silver.silver_pipeline import (
-    run_silver_pipeline,
+from neuro_sleep.reliability.errors import (
+    ConcurrentPipelineRunError,
+)
+from neuro_sleep.silver.silver_job import (
+    run_tracked_silver_job,
 )
 
 
@@ -27,7 +30,7 @@ SILVER_ROOT_PREFIX = (
 
 
 def main() -> None:
-    result = run_silver_pipeline(
+    tracked_result = run_tracked_silver_job(
         psg_bucket=BRONZE_BUCKET,
         psg_object_key=PSG_OBJECT_KEY,
         hypnogram_bucket=BRONZE_BUCKET,
@@ -44,10 +47,13 @@ def main() -> None:
         verify_payload_checksums=True,
     )
 
-    report = (
-        result.reconciliation_report
-    )
+    result = tracked_result.pipeline_result
+    report = result.reconciliation_report
 
+    print(
+        f"pipeline_run_id="
+        f"{tracked_result.run_id}"
+    )
     print(
         f"full_silver_run_status="
         f"{result.status}"
@@ -91,4 +97,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+
+    except ConcurrentPipelineRunError:
+        raise SystemExit(2) from None
