@@ -58,6 +58,24 @@ ALLOWED_STATUSES = {
 
 
 @dataclass(frozen=True)
+class NewQualityCheckResult:
+    pipeline_run_id: RunId
+    data_layer: str
+    dataset_name: str
+    check_name: str
+    severity: QualitySeverity
+    status: QualityStatus
+    rows_checked: int = 0
+    rows_failed: int = 0
+    source_system: str | None = None
+    recording_id: RecordingId | None = None
+    record_key: str | None = None
+    error_code: str | None = None
+    message: str | None = None
+    details: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
 class QualityCheckResultRecord:
     quality_result_id: UUID
     pipeline_run_id: UUID
@@ -126,6 +144,158 @@ def _validate_non_negative(
         )
 
 
+def _validate_new_quality_result(
+    result: NewQualityCheckResult,
+) -> tuple[
+    RunId,
+    str | None,
+    str,
+    str,
+    RecordingId | None,
+    str | None,
+    str,
+    str,
+    str,
+    int,
+    int,
+    str | None,
+    str | None,
+    Jsonb,
+]:
+    cleaned_layer = _validate_choice(
+        name="data_layer",
+        value=result.data_layer,
+        allowed_values=ALLOWED_DATA_LAYERS,
+    )
+
+    cleaned_dataset_name = (
+        _validate_non_empty(
+            name="dataset_name",
+            value=result.dataset_name,
+        )
+    )
+
+    cleaned_check_name = _validate_non_empty(
+        name="check_name",
+        value=result.check_name,
+    )
+
+    cleaned_severity = _validate_choice(
+        name="severity",
+        value=result.severity,
+        allowed_values=ALLOWED_SEVERITIES,
+    )
+
+    cleaned_status = _validate_choice(
+        name="status",
+        value=result.status,
+        allowed_values=ALLOWED_STATUSES,
+    )
+
+    _validate_non_negative(
+        "rows_checked",
+        result.rows_checked,
+    )
+    _validate_non_negative(
+        "rows_failed",
+        result.rows_failed,
+    )
+
+    return (
+        result.pipeline_run_id,
+        result.source_system,
+        cleaned_layer,
+        cleaned_dataset_name,
+        result.recording_id,
+        result.record_key,
+        cleaned_check_name,
+        cleaned_severity,
+        cleaned_status,
+        result.rows_checked,
+        result.rows_failed,
+        result.error_code,
+        result.message,
+        Jsonb(
+            result.details
+            if result.details is not None
+            else {}
+        ),
+    )
+
+
+def create_quality_check_results(
+    results: tuple[
+        NewQualityCheckResult,
+        ...,
+    ],
+) -> tuple[UUID, ...]:
+    if not results:
+        return ()
+
+    validated_results = tuple(
+        _validate_new_quality_result(
+            result
+        )
+        for result in results
+    )
+
+    created_ids: list[UUID] = []
+
+    with get_postgres_connection() as connection:
+        with connection.cursor() as cursor:
+            for values in validated_results:
+                cursor.execute(
+                    """
+                    insert into quality.quality_check_results (
+                        pipeline_run_id,
+                        source_system,
+                        data_layer,
+                        dataset_name,
+                        recording_id,
+                        record_key,
+                        check_name,
+                        severity,
+                        status,
+                        rows_checked,
+                        rows_failed,
+                        error_code,
+                        message,
+                        details
+                    )
+                    values (
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s
+                    )
+                    returning quality_result_id;
+                    """,
+                    values,
+                )
+
+                row = cursor.fetchone()
+
+                if row is None:
+                    raise RuntimeError(
+                        "Failed to create quality "
+                        "check result"
+                    )
+
+                created_ids.append(row[0])
+
+    return tuple(created_ids)
+
+
 def create_quality_check_result(
     *,
     pipeline_run_id: RunId,
@@ -143,114 +313,30 @@ def create_quality_check_result(
     message: str | None = None,
     details: dict[str, Any] | None = None,
 ) -> UUID:
-    cleaned_layer = _validate_choice(
-        name="data_layer",
-        value=data_layer,
-        allowed_values=ALLOWED_DATA_LAYERS,
-    )
-
-    cleaned_dataset_name = (
-        _validate_non_empty(
-            name="dataset_name",
-            value=dataset_name,
+    created_ids = create_quality_check_results(
+        (
+            NewQualityCheckResult(
+                pipeline_run_id=(
+                    pipeline_run_id
+                ),
+                source_system=source_system,
+                data_layer=data_layer,
+                dataset_name=dataset_name,
+                recording_id=recording_id,
+                record_key=record_key,
+                check_name=check_name,
+                severity=severity,
+                status=status,
+                rows_checked=rows_checked,
+                rows_failed=rows_failed,
+                error_code=error_code,
+                message=message,
+                details=details,
+            ),
         )
     )
 
-    cleaned_check_name = _validate_non_empty(
-        name="check_name",
-        value=check_name,
-    )
-
-    cleaned_severity = _validate_choice(
-        name="severity",
-        value=severity,
-        allowed_values=ALLOWED_SEVERITIES,
-    )
-
-    cleaned_status = _validate_choice(
-        name="status",
-        value=status,
-        allowed_values=ALLOWED_STATUSES,
-    )
-
-    _validate_non_negative(
-        "rows_checked",
-        rows_checked,
-    )
-    _validate_non_negative(
-        "rows_failed",
-        rows_failed,
-    )
-
-    details_value = Jsonb(
-        details if details is not None else {}
-    )
-
-    with get_postgres_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                insert into quality.quality_check_results (
-                    pipeline_run_id,
-                    source_system,
-                    data_layer,
-                    dataset_name,
-                    recording_id,
-                    record_key,
-                    check_name,
-                    severity,
-                    status,
-                    rows_checked,
-                    rows_failed,
-                    error_code,
-                    message,
-                    details
-                )
-                values (
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s
-                )
-                returning quality_result_id;
-                """,
-                (
-                    pipeline_run_id,
-                    source_system,
-                    cleaned_layer,
-                    cleaned_dataset_name,
-                    recording_id,
-                    record_key,
-                    cleaned_check_name,
-                    cleaned_severity,
-                    cleaned_status,
-                    rows_checked,
-                    rows_failed,
-                    error_code,
-                    message,
-                    details_value,
-                ),
-            )
-
-            row = cursor.fetchone()
-
-            if row is None:
-                raise RuntimeError(
-                    "Failed to create quality "
-                    "check result"
-                )
-
-            return row[0]
+    return created_ids[0]
 
 
 def get_quality_check_results_for_run(

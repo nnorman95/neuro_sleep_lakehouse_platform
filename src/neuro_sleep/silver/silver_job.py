@@ -20,6 +20,10 @@ from neuro_sleep.ops.pipeline_run import (
     finish_pipeline_run_success,
     start_pipeline_run,
 )
+from neuro_sleep.quality.silver_quality_history import (
+    persist_silver_quality_report,
+    persist_skipped_silver_quality_result,
+)
 from neuro_sleep.reliability.errors import (
     ConcurrentPipelineRunError,
 )
@@ -186,6 +190,19 @@ def run_tracked_silver_job(
         )
         heartbeat.start()
 
+        def quality_report_handler(
+            bundle,
+            report,
+            output_prefix: str,
+        ) -> None:
+            persist_silver_quality_report(
+                pipeline_run_id=run_id,
+                source_system=SOURCE_SYSTEM,
+                bundle=bundle,
+                report=report,
+                output_prefix=output_prefix,
+            )
+
         pipeline_result = run_silver_pipeline(
             psg_bucket=psg_bucket,
             psg_object_key=psg_object_key,
@@ -207,6 +224,9 @@ def run_tracked_silver_job(
             verify_payload_checksums=(
                 verify_payload_checksums
             ),
+            quality_report_handler=(
+                quality_report_handler
+            ),
             client=client,
         )
 
@@ -217,6 +237,30 @@ def run_tracked_silver_job(
         heartbeat = None
 
         if pipeline_result.status == "skipped":
+            persist_skipped_silver_quality_result(
+                pipeline_run_id=run_id,
+                source_system=SOURCE_SYSTEM,
+                recording_id=(
+                    pipeline_result.recording_id
+                ),
+                output_prefix=(
+                    pipeline_result.output_prefix
+                ),
+                reconciliation_passed=(
+                    pipeline_result
+                    .reconciliation_report
+                    .passed
+                ),
+                data_object_count=(
+                    pipeline_result
+                    .data_object_count
+                ),
+                total_object_count=(
+                    pipeline_result
+                    .total_object_count
+                ),
+            )
+
             finish_pipeline_run_skipped(
                 run_id=run_id,
                 reason=(

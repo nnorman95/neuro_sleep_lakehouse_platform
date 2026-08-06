@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=17
+total=18
 
 
 run_test() {
@@ -90,6 +90,10 @@ run_test \
 run_test \
     "Check Silver partial-output recovery" \
     "neuro_sleep.silver.partial_recovery_smoke"
+
+run_test \
+    "Check durable Silver quality history" \
+    "neuro_sleep.silver.silver_quality_history_smoke"
 
 run_test \
     "Check tracked Silver job observability" \

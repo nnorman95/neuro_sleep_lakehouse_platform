@@ -18,6 +18,7 @@ from neuro_sleep.silver.signal_extractor import (
     DEFAULT_CHUNK_DURATION_SECONDS,
 )
 from neuro_sleep.silver.silver_recording_writer import (
+    QualityReportHandler,
     SilverRecordingWriteResult,
     validate_output_prefix,
     write_silver_recording,
@@ -602,6 +603,9 @@ def write_silver_recording_idempotent(
     ),
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
+    quality_report_handler: (
+        QualityReportHandler | None
+    ) = None,
     client: BaseClient | None = None,
 ) -> SilverIdempotentWriteResult:
     source_pair_id = build_source_pair_id(
@@ -776,6 +780,9 @@ def write_silver_recording_idempotent(
                 ),
                 signal_stop_seconds=(
                     signal_stop_seconds
+                ),
+                quality_report_handler=(
+                    quality_report_handler
                 ),
                 client=client,
             )
