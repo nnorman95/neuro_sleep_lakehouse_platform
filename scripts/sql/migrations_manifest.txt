@@ -31,7 +31,10 @@ scripts/sql/seeds/023_seed_governance_ops_file_attempt.sql
 
 # Silver staging tables
 scripts/sql/migrations/024_create_staging_silver_tables.sql
+scripts/sql/migrations/025_correct_staging_silver_identity_and_lineage.sql
 scripts/sql/seeds/030_seed_governance_staging_silver_tables.sql
+scripts/sql/seeds/031_seed_staging_silver_contract_v2.sql
+scripts/sql/seeds/032_seed_staging_silver_lineage_classification.sql
 
 # Durable quality history
 scripts/sql/migrations/026_create_quality_check_results.sql

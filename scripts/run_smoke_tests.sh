@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=11
+total=12
 
 
 run_test() {
@@ -54,6 +54,10 @@ run_test \
 run_test \
     "Check quality-check result history" \
     "neuro_sleep.quality.check_results_smoke"
+
+run_test \
+    "Check Silver staging identity schema" \
+    "neuro_sleep.staging.identity_schema_smoke"
 
 run_test \
     "Check production Bronze file writer" \
