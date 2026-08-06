@@ -17,7 +17,7 @@ uses Python 3.13.5.
 | Schema | Purpose | Current state |
 |---|---|---|
 | `raw` | source-object registry and ingestion metadata | implemented |
-| `staging` | relational landing area for selected Silver datasets | partially implemented |
+| `staging` | relational landing area for selected Silver datasets | schema implemented; loaders pending |
 | `warehouse` | dimensional analytical models | schema exists; tables not implemented |
 | `mart` | consumption-ready relational models | schema exists; tables not implemented |
 | `ops` | pipeline execution and file-attempt history | implemented |
@@ -222,6 +222,8 @@ staging.silver_recordings
 staging.silver_channels
 staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
+staging.silver_subjects
+staging.silver_recording_contexts
 ```
 
 The local tables currently contain zero rows because the production loader has
@@ -283,18 +285,50 @@ Grain: one emitted 30-second epoch in one concrete Silver representation.
 Epoch timeline positions remain non-negative and limited to the emitted PSG
 range.
 
-## 8. Missing Phase 6 Staging Tables
+## 8. Subject Metadata Staging Tables
 
-The subject metadata Parquet datasets are implemented, but relational landing
-tables are not:
+Migration `033_create_staging_silver_subject_metadata_tables.sql` implements:
 
 ```text
 staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-Their DDL, contracts, classifications, loaders, and smoke tests must be added
-before subject-aware Warehouse models are built.
+`staging.silver_subjects` grain:
+
+```text
+one logical subject row
++ one concrete Silver metadata publication
+```
+
+Primary key:
+
+```text
+subject_key
++ metadata_input_fingerprint
+```
+
+`staging.silver_recording_contexts` grain:
+
+```text
+one logical recording-context row
++ one concrete Silver metadata publication
+```
+
+Primary key:
+
+```text
+source_system
++ dataset_version
++ collection
++ recording_key
++ metadata_input_fingerprint
+```
+
+The context table has a composite foreign key to the matching staged subject
+publication. Both tables are empty until the production subject-metadata
+staging loader is implemented. Their v1 contracts, column classifications, and
+focused schema smoke test are implemented.
 
 ## 9. Planned Warehouse Core
 
@@ -350,6 +384,7 @@ The current manifest includes:
 024_create_staging_silver_tables.sql
 025_correct_staging_silver_identity_and_lineage.sql
 026_create_quality_check_results.sql
+033_create_staging_silver_subject_metadata_tables.sql
 ```
 
 Related governance seeds register the active contracts and column

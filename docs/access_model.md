@@ -137,10 +137,10 @@ Implemented:
 - open-source access metadata;
 - restricted internal policy;
 - governance registries and column classification;
-- restricted handling guidance for patient-level Bronze and Silver data.
+- restricted handling guidance for patient-level Bronze and Silver data;
+- subject/context staging column classifications.
 
 Phase 6 requirement:
 
-- classify new subject/context staging columns;
 - classify Warehouse dimensions and facts;
 - keep source identifiers out of broad marts by default.

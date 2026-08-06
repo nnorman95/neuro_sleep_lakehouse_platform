@@ -1,0 +1,98 @@
+version: "v1"
+
+contract_name: "staging_silver_recording_contexts_contract"
+
+table:
+  schema: "staging"
+  name: "silver_recording_contexts"
+  layer: "staging"
+
+owner_role: "data_engineer"
+
+description: "Version-aware landing contract for Silver recording-to-subject context."
+
+grain: "One logical recording-context row in one concrete Silver subject-metadata publication."
+
+columns:
+  - {name: "recording_key", type: "text", nullable: false}
+  - {name: "subject_key", type: "text", nullable: false}
+  - {name: "source_system", type: "text", nullable: false}
+  - {name: "dataset_version", type: "text", nullable: false}
+  - {name: "collection", type: "text", nullable: false}
+  - {name: "night_number", type: "smallint", nullable: false}
+  - {name: "lights_off_seconds", type: "integer", nullable: false}
+  - {name: "treatment", type: "text", nullable: true}
+  - {name: "source_bucket", type: "text", nullable: false}
+  - {name: "source_object_key", type: "text", nullable: false}
+  - {name: "metadata_input_fingerprint", type: "text", nullable: false}
+  - {name: "schema_version", type: "text", nullable: false}
+  - {name: "transform_version", type: "text", nullable: false}
+  - {name: "silver_bucket", type: "text", nullable: false}
+  - {name: "silver_output_prefix", type: "text", nullable: false}
+  - {name: "staging_load_run_id", type: "uuid", nullable: false}
+  - {name: "loaded_at", type: "timestamptz", nullable: false}
+
+constraints:
+  primary_key:
+    - "source_system"
+    - "dataset_version"
+    - "collection"
+    - "recording_key"
+    - "metadata_input_fingerprint"
+
+  unique:
+    - ["silver_bucket", "silver_output_prefix", "recording_key"]
+
+  checks:
+    - "subject_key is a lowercase 64-character SHA-256 value"
+    - "metadata_input_fingerprint is a lowercase 64-character SHA-256 value"
+    - "collection in ('sleep-cassette', 'sleep-telemetry')"
+    - "night_number > 0"
+    - "lights_off_seconds >= 0 and lights_off_seconds < 86400"
+    - "sleep-cassette treatment is null"
+    - "sleep-telemetry treatment in ('placebo', 'temazepam')"
+
+relationships:
+  - columns:
+      - "subject_key"
+      - "metadata_input_fingerprint"
+      - "source_system"
+      - "dataset_version"
+      - "collection"
+    references:
+      schema: "staging"
+      table: "silver_subjects"
+      columns:
+        - "subject_key"
+        - "metadata_input_fingerprint"
+        - "source_system"
+        - "dataset_version"
+        - "collection"
+
+  - column: "staging_load_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+lineage:
+  - "source_bucket"
+  - "source_object_key"
+  - "metadata_input_fingerprint"
+  - "schema_version"
+  - "transform_version"
+  - "silver_bucket"
+  - "silver_output_prefix"
+  - "staging_load_run_id"
+  - "loaded_at"
+
+compatibility:
+  initial_physical_contract: "Migration 033 creates the first relational landing table for Silver recording contexts."
+
+data_sensitivity:
+  contains_personal_data: true
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "redact"

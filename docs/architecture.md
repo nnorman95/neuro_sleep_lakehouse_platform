@@ -184,6 +184,8 @@ staging.silver_recordings
 staging.silver_channels
 staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
+staging.silver_subjects
+staging.silver_recording_contexts
 ```
 
 Migration `025_correct_staging_silver_identity_and_lineage.sql` has already
@@ -192,11 +194,10 @@ applied the accepted version-aware identity and lineage design.
 The current local staging tables are empty. No production Silver-to-staging
 loader has been implemented yet.
 
-Phase 6 must next add:
+Migration `033` adds the subject/context staging structures. Phase 6 must
+next add:
 
 ```text
-staging.silver_subjects
-staging.silver_recording_contexts
 production Silver-to-staging loaders
 ```
 
@@ -236,7 +237,7 @@ Sleep Telemetry recordings: 1
 Production signal rows: 116,255,936
 Subjects: 100
 Recording contexts: 197
-Smoke tests: 53/53
+Smoke tests: 54/54
 ```
 
 Completed Bronze and Silver behavior must not be rebuilt during Warehouse

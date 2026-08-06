@@ -367,16 +367,17 @@ recording_id + epoch_number
 
 Epoch `start_seconds` remains non-negative.
 
-## 5. Required Phase 6 Staging Additions
+## 5. Implemented Phase 6 Subject Metadata Staging
 
-Two staging tables are required before subject-aware Warehouse models can be built:
+Migration `033_create_staging_silver_subject_metadata_tables.sql` implements:
 
 ```text
 staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-They are not implemented yet.
+Their contracts, governance classifications, and focused schema smoke test are
+also implemented. The production loader remains pending.
 
 ### 5.1 `staging.silver_subjects`
 
@@ -948,21 +949,20 @@ One Sleep Telemetry recording written
 116,255,936 production Silver signal rows written
 Silver subjects published with 100 subjects
 Silver recording_contexts published with 197 contexts
-Four recording-related staging tables implemented
+Six Silver staging tables implemented
 Silver identity and lineage ADR accepted
+Warehouse grain and version-selection ADR accepted
 Durable quality-check history implemented
-Core, reliability, and Silver smoke suites passing: 53/53
+Core, reliability, and Silver smoke suites passing: 54/54
 ```
 
 Not implemented yet:
 
 ```text
-staging.silver_subjects
-staging.silver_recording_contexts
 production Silver-to-staging loader
 Warehouse Core tables
 dbt project, models, and tests
 mart and Gold models
 ```
 
-The next modeling task is to approve the Warehouse grain and identity rules, then implement the missing subject/context staging structures without changing completed Bronze and Silver behavior.
+The next implementation task is the production Silver-to-staging loader for subject metadata, followed by the remaining recording metadata loaders and Warehouse Core DDL.

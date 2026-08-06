@@ -40,3 +40,8 @@ scripts/sql/seeds/032_seed_staging_silver_lineage_classification.sql
 scripts/sql/migrations/026_create_quality_check_results.sql
 scripts/sql/seeds/027_seed_data_contract_registry_quality_check_results.sql
 scripts/sql/seeds/028_seed_column_classification_quality_check_results.sql
+
+# Silver subject metadata staging
+scripts/sql/migrations/033_create_staging_silver_subject_metadata_tables.sql
+scripts/sql/seeds/034_seed_data_contract_registry_staging_silver_subject_metadata.sql
+scripts/sql/seeds/035_seed_column_classification_staging_silver_subject_metadata.sql
