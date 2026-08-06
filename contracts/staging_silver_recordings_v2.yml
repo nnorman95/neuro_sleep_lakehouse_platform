@@ -1,0 +1,75 @@
+version: "v2"
+
+contract_name: "staging_silver_recordings_contract"
+
+table:
+  schema: "staging"
+  name: "silver_recordings"
+  layer: "staging"
+
+owner_role: "data_engineer"
+
+description: "Version-aware landing contract for Silver recording metadata and Bronze-to-Silver lineage."
+
+columns:
+  - {name: "recording_id", type: "uuid", nullable: false}
+  - {name: "source_system", type: "text", nullable: false}
+  - {name: "psg_bucket", type: "text", nullable: false}
+  - {name: "psg_object_key", type: "text", nullable: false}
+  - {name: "hypnogram_bucket", type: "text", nullable: false}
+  - {name: "hypnogram_object_key", type: "text", nullable: false}
+  - {name: "recording_start", type: "timestamp", nullable: false}
+  - {name: "duration_seconds", type: "double precision", nullable: false}
+  - {name: "channel_count", type: "smallint", nullable: false}
+  - {name: "annotation_count", type: "integer", nullable: false}
+  - {name: "in_range_epoch_count", type: "integer", nullable: false}
+  - {name: "out_of_range_epoch_count", type: "integer", nullable: false}
+  - {name: "trailing_overhang_seconds", type: "double precision", nullable: false}
+  - {name: "psg_file_id", type: "uuid", nullable: false}
+  - {name: "hypnogram_file_id", type: "uuid", nullable: false}
+  - {name: "source_pair_id", type: "text", nullable: false}
+  - {name: "input_fingerprint", type: "text", nullable: false}
+  - {name: "config_id", type: "text", nullable: false}
+  - {name: "schema_version", type: "text", nullable: false}
+  - {name: "transform_version", type: "text", nullable: false}
+  - {name: "psg_checksum_sha256", type: "text", nullable: false}
+  - {name: "hypnogram_checksum_sha256", type: "text", nullable: false}
+  - {name: "silver_bucket", type: "text", nullable: false}
+  - {name: "silver_output_prefix", type: "text", nullable: false}
+  - {name: "staging_load_run_id", type: "uuid", nullable: false}
+  - {name: "loaded_at", type: "timestamptz", nullable: false}
+
+constraints:
+  primary_key:
+    - "recording_id"
+
+  unique:
+    - ["source_system", "source_pair_id", "input_fingerprint", "schema_version", "transform_version", "config_id"]
+    - ["silver_bucket", "silver_output_prefix"]
+
+relationships:
+  - column: "psg_file_id"
+    references:
+      schema: "raw"
+      table: "file_registry"
+      column: "file_id"
+
+  - column: "hypnogram_file_id"
+    references:
+      schema: "raw"
+      table: "file_registry"
+      column: "file_id"
+
+  - column: "staging_load_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "none"
