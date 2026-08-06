@@ -1,6 +1,6 @@
 # Data Model
 
-This document describes the first planned data model for the NeuroSleep Lakehouse Platform.
+This document describes the evolving data model for the NeuroSleep Lakehouse Platform. It preserves the original analytical design while distinguishing clearly between implemented structures and future models.
 
 The model separates subjects, recordings, channels, sleep epochs, signal quality records, pipeline runs, file metadata, and quarantine records into different tables. This reduces duplication, improves data integrity, and makes relationships between entities clearer.
 
@@ -219,21 +219,25 @@ Purpose:
 
 - Clean and standardize data.
 - Validate required values.
-- Deduplicate records with clear rules.
-- Link records back to source files.
+- Preserve source semantics and lineage.
+- Deduplicate/idempotently publish records with clear rules.
+- Keep high-volume signal data in columnar object storage.
 
-Possible tables:
+Implemented Silver datasets in MinIO:
 
 ```text
-silver_subjects
-silver_recordings
-silver_channels
-silver_sleep_epochs
-silver_signal_quality
-silver_device_events
+recordings
+channels
+sleep_stage_intervals
+sleep_stage_epochs
+signals
 ```
 
-Silver is where raw values become trustworthy.
+The implemented Silver layer is Parquet-based and uses explicit PyArrow schemas,
+versioned prefixes, quality gates, `_SUCCESS.json`, checksums, and reconciliation.
+
+`subjects`, `signal_quality`, and `device_events` are not implemented Silver datasets yet.
+Subject metadata remains a required future addition before the final subject-aware warehouse model is complete.
 
 ### Warehouse Layer
 
@@ -378,9 +382,25 @@ status
 
 ## 10. Sleep Stage Standardization
 
-Sleep stage values should be standardized before they reach trusted analytical tables.
+Sleep-stage semantics are intentionally different between source-preserving Silver
+and the later analytical warehouse.
 
-Allowed planned values:
+Implemented source-preserving Silver values:
+
+```text
+W
+N1
+N2
+N3
+N4
+REM
+UNKNOWN
+MOVEMENT
+```
+
+Silver preserves source Stage 3 and Stage 4 separately.
+
+Planned analytical values:
 
 ```text
 W
@@ -390,6 +410,10 @@ N3
 REM
 UNKNOWN
 ```
+
+At the analytical layer, source-preserving `N3` and `N4` may both map to analytical
+`N3`. `UNKNOWN` and `MOVEMENT` must remain explicit and must never be silently
+treated as ordinary sleep stages.
 
 Possible source values:
 
@@ -491,15 +515,24 @@ Current decisions:
 | Operational metadata | More normalized |
 | Analytical warehouse | Star-schema style |
 | Bad records | Stored in quarantine |
-| Final ML table | Built from trusted silver/gold data |
+| Final ML table | Built from trusted Silver/Gold data |
 | Subject split | Split by subject, not by row |
+| Implemented Silver storage | Parquet in MinIO |
+| High-volume raw signals | Remain in object storage, not PostgreSQL row-by-row |
+| Warehouse transformations | Planned through dbt after staging stabilization |
 
 ## 15. Questions To Revisit Later
 
-These decisions can be revisited later:
+Resolved decisions:
 
-- Should `silver` be stored only as Parquet, or also loaded into PostgreSQL?
-- Should `warehouse` facts live in PostgreSQL or object storage?
+- Silver is stored as Parquet in MinIO.
+- Low-volume Silver metadata/epochs may be loaded into PostgreSQL staging.
+- High-volume signal samples remain in object storage.
+- PostgreSQL warehouse/mart models are planned for relational analytics.
+
+Questions still open:
+
+- Should `warehouse` facts live entirely in PostgreSQL or should some high-volume analytical outputs remain object-storage-only?
 - Should `subject_key` be generated in Spark, dbt, or PostgreSQL?
 - Should sleep epochs be stored with one row per epoch only, or one row per epoch per channel?
 - Should signal features be stored in the same ML table or a separate feature table?
@@ -510,7 +543,15 @@ These decisions can be revisited later:
 Current status:
 
 ```text
-Initial data model design.
+Bronze implemented
+Silver core implemented
+Full persistent Silver run completed for SC4001E0
+Four cassette PSG/Hypnogram pairs inspected
+Initial staging.silver_* PostgreSQL tables created
+Staging identity/version lineage stabilization in progress
+Subject metadata pipeline not yet implemented
+Warehouse/dbt models not yet implemented
 ```
 
-The model is intentionally a first version. It should become more precise after the exact dataset sample is selected.
+The original dimensional model remains the target, but physical tables should only be
+created when their upstream trusted datasets and lineage semantics are ready.

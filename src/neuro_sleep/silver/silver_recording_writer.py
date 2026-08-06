@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+from typing import Callable
 
 from botocore.client import BaseClient
 
@@ -37,6 +38,16 @@ from neuro_sleep.silver.silver_object_writer import (
 from neuro_sleep.storage.object_storage import (
     get_object_storage_client,
 )
+
+
+QualityReportHandler = Callable[
+    [
+        SilverRecordingBundle,
+        SilverQualityReport,
+        str,
+    ],
+    None,
+]
 
 
 @dataclass(frozen=True)
@@ -181,6 +192,9 @@ def write_silver_recording(
     ),
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
+    quality_report_handler: (
+        QualityReportHandler | None
+    ) = None,
     client: BaseClient | None = None,
 ) -> SilverRecordingWriteResult:
     cleaned_prefix = (
@@ -237,6 +251,16 @@ def write_silver_recording(
                     bundle
                 )
             )
+
+            if (
+                quality_report_handler
+                is not None
+            ):
+                quality_report_handler(
+                    bundle,
+                    quality_report,
+                    cleaned_prefix,
+                )
 
             quality_report.raise_for_errors()
 

@@ -443,7 +443,7 @@ def download_once(
 
         raise error from exc
 
-    except Exception as error:
+    except BaseException as error:
         if progress_reporter is not None:
             progress_reporter.fail(
                 error=error,

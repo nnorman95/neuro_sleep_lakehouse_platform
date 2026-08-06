@@ -1,0 +1,124 @@
+version: "v1"
+
+contract_name: "quality_check_results_contract"
+
+table:
+  schema: "quality"
+  name: "quality_check_results"
+  layer: "quality"
+
+owner_role: "data_engineer"
+
+description: "Durable history of data-quality check summaries and detected issues linked to pipeline runs and datasets."
+
+columns:
+  - name: "quality_result_id"
+    type: "uuid"
+    nullable: false
+    description: "UUIDv7 primary key for one persisted quality result."
+
+  - name: "pipeline_run_id"
+    type: "uuid"
+    nullable: false
+    description: "Pipeline execution that produced the quality result."
+
+  - name: "source_system"
+    type: "text"
+    nullable: true
+    description: "External source-system identifier when the check is source-specific."
+
+  - name: "data_layer"
+    type: "text"
+    nullable: false
+    description: "Platform layer evaluated by the check."
+
+  - name: "dataset_name"
+    type: "text"
+    nullable: false
+    description: "Dataset or table evaluated by the check."
+
+  - name: "recording_id"
+    type: "uuid"
+    nullable: true
+    description: "Silver recording identifier when the check is recording-specific."
+
+  - name: "record_key"
+    type: "text"
+    nullable: true
+    description: "Optional object prefix, table key, partition, or other trace key."
+
+  - name: "check_name"
+    type: "text"
+    nullable: false
+    description: "Stable machine-readable name of the quality check."
+
+  - name: "severity"
+    type: "text"
+    nullable: false
+    description: "Operational severity assigned to the result."
+
+  - name: "status"
+    type: "text"
+    nullable: false
+    description: "Outcome of the check: passed, warning, failed, or skipped."
+
+  - name: "rows_checked"
+    type: "bigint"
+    nullable: false
+    description: "Number of rows or entities evaluated by the check."
+
+  - name: "rows_failed"
+    type: "bigint"
+    nullable: false
+    description: "Number of rows or entities that failed the check."
+
+  - name: "error_code"
+    type: "text"
+    nullable: true
+    description: "Machine-readable issue code when the result represents a detected problem."
+
+  - name: "message"
+    type: "text"
+    nullable: true
+    description: "Human-readable result or issue description."
+
+  - name: "details"
+    type: "jsonb"
+    nullable: false
+    description: "Structured check-specific metadata."
+
+  - name: "checked_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when the quality check was evaluated."
+
+  - name: "created_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Timestamp when the database row was created."
+
+constraints:
+  primary_key:
+    - "quality_result_id"
+
+  checks:
+    - "data_layer is an allowed platform layer"
+    - "severity in ('info', 'warning', 'error', 'critical')"
+    - "status in ('passed', 'warning', 'failed', 'skipped')"
+    - "rows_checked >= 0"
+    - "rows_failed >= 0"
+
+relationships:
+  - column: "pipeline_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "redact"

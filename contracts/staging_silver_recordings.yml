@@ -1,0 +1,33 @@
+version: "v1"
+contract_name: "staging_silver_recordings_contract"
+table:
+  schema: "staging"
+  name: "silver_recordings"
+  layer: "staging"
+owner_role: "data_engineer"
+description: "Current landing contract for Silver recording metadata."
+columns:
+  - {name: "recording_id", type: "uuid", nullable: false}
+  - {name: "source_system", type: "text", nullable: false}
+  - {name: "psg_bucket", type: "text", nullable: false}
+  - {name: "psg_object_key", type: "text", nullable: false}
+  - {name: "hypnogram_bucket", type: "text", nullable: false}
+  - {name: "hypnogram_object_key", type: "text", nullable: false}
+  - {name: "recording_start", type: "timestamp", nullable: false}
+  - {name: "duration_seconds", type: "double precision", nullable: false}
+  - {name: "channel_count", type: "smallint", nullable: false}
+  - {name: "annotation_count", type: "integer", nullable: false}
+  - {name: "in_range_epoch_count", type: "integer", nullable: false}
+  - {name: "out_of_range_epoch_count", type: "integer", nullable: false}
+  - {name: "trailing_overhang_seconds", type: "double precision", nullable: false}
+constraints:
+  primary_key: ["recording_id"]
+  unique:
+    - ["psg_bucket", "psg_object_key", "hypnogram_bucket", "hypnogram_object_key"]
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "none"

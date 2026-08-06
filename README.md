@@ -1,41 +1,62 @@
 # NeuroSleep Lakehouse Platform
 
-NeuroSleep is a local data engineering platform for ingesting,
-validating, storing, transforming, and analyzing sleep neuroscience
-data.
+NeuroSleep is a local data engineering platform for ingesting, validating,
+storing, transforming, and analyzing sleep neuroscience data.
 
-The project currently uses **Sleep-EDF Database Expanded v1.0.0**
-as its source.
+The active source is **Sleep-EDF Database Expanded v1.0.0** from PhysioNet.
 
-## Source
-
-Source system:
+## Current architecture
 
 ```text
-physionet_sleep_edf
+PhysioNet Sleep-EDF
+        |
+        v
+Python Extract
+streaming HTTP + SHA-256 verification
+        |
+        v
+MinIO Bronze
+        |
+        +--> raw.file_registry
+        +--> ops.pipeline_run
+        +--> ops.file_attempt
+        +--> quality.quarantine_records
+        |
+        v
+Python / edfio / NumPy / PyArrow
+quality gate + chunked signal extraction
+        |
+        v
+MinIO Silver
+Parquet + versioned prefixes + _SUCCESS.json
+        |
+        +--> metadata/epochs -> PostgreSQL staging -> dbt/warehouse later
+        |
+        +--> high-volume signals -> feature processing/Gold later
 ```
 
-Dataset:
+## Implemented
 
-```text
-Sleep-EDF Database Expanded v1.0.0
-```
+- PostgreSQL 18 and MinIO through Docker Compose.
+- UUIDv7 identifiers.
+- SQL migrations and idempotent governance seeds.
+- Streaming Sleep-EDF Extract with official SHA-256 verification.
+- Recoverable Bronze ingestion, locking, heartbeat, per-file attempt history,
+  structured logs, and Bronze reconciliation.
+- EDF schema inspection for four PSG/Hypnogram sample pairs.
+- Silver recordings, channels, source annotation intervals, 30-second epochs,
+  and chunked signal samples.
+- Explicit PyArrow schemas, Parquet output, quality gates, idempotent writes,
+  `_SUCCESS.json`, payload checksums, and reconciliation.
+- A successful full persistent Silver run for `SC4001E0` with more than
+  24 million rows.
+- Initial PostgreSQL `staging.silver_*` landing tables.
 
-Access model:
-
-```text
-open access
-credentials required: no
-```
-
-The source contains polysomnography recordings in EDF format,
-matching EDF+ hypnograms, and descriptive metadata.
-
-Real source files are never committed to the repository.
+Real EDF and generated Parquet files are never committed to Git.
 
 ## Data profiles
 
-Limited development mode:
+Sample mode:
 
 ```env
 DATA_PROFILE=sample
@@ -45,53 +66,11 @@ SLEEP_EDF_INCLUDE_TELEMETRY=true
 SLEEP_EDF_INCLUDE_METADATA=true
 ```
 
-A GitHub user can change the recording limit without modifying
-Python code:
-
-```env
-SLEEP_EDF_MAX_RECORDINGS=20
-```
-
 Full-source mode:
 
 ```env
 DATA_PROFILE=full
 ```
-
-Full mode ignores sample limits and selects every file discovered
-in the official checksum manifest.
-
-## Local architecture
-
-```text
-Sleep-EDF / PhysioNet
-          |
-          v
-Python Extract and validation
-          |
-          v
-MinIO Bronze
-          |
-          +----> raw.file_registry
-          |
-          +----> ops.pipeline_run
-          |
-          +----> quality.quarantine_records
-```
-
-Current infrastructure:
-
-- PostgreSQL
-- MinIO
-- Docker Compose
-- Python
-- SQL migrations and seeds
-- governance metadata
-- raw file registry
-- pipeline audit log
-- quarantine layer
-- reusable Bronze writer
-- Sleep-EDF checksum manifest selection
 
 ## Local setup
 
@@ -106,50 +85,33 @@ make bootstrap
 ## Common commands
 
 ```bash
-make help
 make up
 make ps
 make migrate
 make smoke
+make reliability-smoke
+make silver-smoke
+make test
 make source-check
 make psql
 ```
 
-## Source modules
+`make smoke` is the core platform suite. `make reliability-smoke` covers
+retry/failure/recovery behavior. `make silver-smoke` covers the Silver layer.
+`make test` runs all three suites.
+
+## Current milestone
+
+Completed milestones:
 
 ```text
-src/neuro_sleep/sources/sleep_edf.py
-src/neuro_sleep/sources/sleep_edf_manifest.py
+v0.1.0-bronze
+v0.2.0-silver
 ```
 
-Check the source definition:
+The current branch is stabilizing Silver identity, lineage, operational
+reliability, sample coverage, and PostgreSQL staging before warehouse/dbt
+models are built.
 
-```bash
-PYTHONPATH=src python -m neuro_sleep.sources.sleep_edf
-```
-
-Check manifest selection:
-
-```bash
-PYTHONPATH=src python -m neuro_sleep.sources.sleep_edf_manifest_smoke
-```
-
-## Current stage
-
-The local platform, metadata layer, Bronze writer, and source
-manifest are implemented.
-
-The next phase is the real open-access HTTP Extract:
-
-```text
-fetch SHA256SUMS.txt
-select sample or full manifest
-stream files from PhysioNet
-verify SHA-256
-write files to MinIO Bronze
-register files in PostgreSQL
-resume interrupted downloads
-skip already completed files
-```
-
-No real Sleep-EDF data is stored in this repository.
+The `staging.silver_*` DDL exists, but the production Silver-to-staging loader
+is intentionally not enabled until the version/lineage design is finalized.

@@ -16,6 +16,9 @@ from neuro_sleep.silver.reconciliation import (
 from neuro_sleep.silver.signal_extractor import (
     DEFAULT_CHUNK_DURATION_SECONDS,
 )
+from neuro_sleep.silver.silver_recording_writer import (
+    QualityReportHandler,
+)
 from neuro_sleep.storage.object_storage import (
     get_object_storage_client,
 )
@@ -41,6 +44,19 @@ class SilverPipelineResult:
         return self.write_result.output_prefix
 
     @property
+    def source_pair_id(self) -> str:
+        return (
+            self.write_result.source_pair_id
+        )
+
+    @property
+    def input_fingerprint(self) -> str:
+        return (
+            self.write_result
+            .input_fingerprint
+        )
+
+    @property
     def data_object_count(self) -> int:
         return (
             self.write_result
@@ -61,6 +77,24 @@ class SilverPipelineResult:
             .expected_row_count
         )
 
+    @property
+    def recovered_partial_output(
+        self,
+    ) -> bool:
+        return (
+            self.write_result
+            .recovered_partial_output
+        )
+
+    @property
+    def recovered_object_count(
+        self,
+    ) -> int:
+        return (
+            self.write_result
+            .recovered_object_count
+        )
+
 
 def run_silver_pipeline(
     psg_bucket: str,
@@ -76,6 +110,9 @@ def run_silver_pipeline(
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
     verify_payload_checksums: bool = True,
+    quality_report_handler: (
+        QualityReportHandler | None
+    ) = None,
     client: BaseClient | None = None,
 ) -> SilverPipelineResult:
     owns_client = client is None
@@ -104,6 +141,9 @@ def run_silver_pipeline(
                 ),
                 signal_stop_seconds=(
                     signal_stop_seconds
+                ),
+                quality_report_handler=(
+                    quality_report_handler
                 ),
                 client=client,
             )

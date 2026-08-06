@@ -8,48 +8,34 @@
 
 ## Environment
 
-Create the local environment file:
-
 ```bash
 cp .env.example .env
-```
-
-Create and activate the Python environment:
-
-```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Start the platform
+## Bootstrap
 
 ```bash
 make bootstrap
 ```
 
-This starts PostgreSQL and MinIO, initializes buckets, applies SQL
-migrations and seeds, and runs smoke tests.
+Bootstrap starts PostgreSQL/MinIO, initializes buckets, runs SQL migrations and
+seeds, and runs the core smoke suite.
 
-## Check services
-
-```bash
-make ps
-```
-
-## Check source configuration
-
-```bash
-make source-check
-```
-
-## Run all smoke tests
+## Validation
 
 ```bash
 make smoke
+make reliability-smoke
+make silver-smoke
+make test
 ```
 
-## Sample source configuration
+`make test` runs all registered suites.
+
+## Source configuration
 
 ```env
 ACTIVE_SOURCE=sleep_edf
@@ -61,12 +47,8 @@ SLEEP_EDF_INCLUDE_TELEMETRY=true
 SLEEP_EDF_INCLUDE_METADATA=true
 ```
 
-## Full-source configuration
+The real HTTP Extract pipeline is implemented. Example one-recording run:
 
-```env
-ACTIVE_SOURCE=sleep_edf
-DATA_PROFILE=full
+```bash
+SLEEP_EDF_MAX_RECORDINGS=1 PYTHONPATH=src python -m neuro_sleep.ingestion.sleep_edf_extract
 ```
-
-Full source data is downloaded only when the real Extract command
-is implemented and explicitly executed.

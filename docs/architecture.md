@@ -1,68 +1,58 @@
 # Architecture
 
-## Source
+## Active source
 
 ```text
 Sleep-EDF Database Expanded v1.0.0
 source_system = physionet_sleep_edf
-access_model = open
+external access model = open
+internal patient-level access policy = restricted
 ```
 
-## Platform flow
+## Implemented flow
 
 ```text
 PhysioNet
-    |
-    v
-Source manifest and file selection
-    |
-    v
-Streaming Python Extract
-    |
-    v
-MinIO Bronze
-    |
-    +--> raw.file_registry
-    +--> ops.pipeline_run
-    +--> quality.quarantine_records
-    |
-    v
-Silver normalized data
-    |
-    v
-Warehouse and marts
+  -> remote manifest and checksum inventory
+  -> streaming Python Extract
+  -> SHA-256 verification
+  -> MinIO Bronze
+  -> Python / edfio / NumPy / PyArrow
+  -> Silver quality gate
+  -> MinIO Silver Parquet
+  -> _SUCCESS.json + reconciliation
 ```
 
-## Current implemented components
+Operational metadata is stored in `raw`, `ops`, `quality`, and `governance`
+PostgreSQL schemas.
 
-- Docker Compose
-- PostgreSQL
-- MinIO
-- SQL migrations and seeds
-- source-system registry
-- data-contract registry
-- column classification
-- pipeline-run audit log
-- raw-file registry
-- quarantine records
-- quarantine payload pointers
-- reusable Bronze writer
-- Sleep-EDF source definition
-- checksum manifest parsing and sample/full selection
-
-## Source modules
+## Current Silver datasets
 
 ```text
-src/neuro_sleep/sources/sleep_edf.py
-src/neuro_sleep/sources/sleep_edf_manifest.py
+recordings/part-00000.parquet
+channels/part-00000.parquet
+sleep_stage_intervals/part-00000.parquet
+sleep_stage_epochs/part-00000.parquet
+signals/channel=<normalized_name>/part-*.parquet
+_SUCCESS.json
 ```
 
-## Planned Extract properties
+A full persistent Silver run has been completed for `SC4001E0`. Four cassette
+PSG/Hypnogram pairs have been inspected at the Bronze/schema level.
 
-- stream large EDF files without loading them fully into RAM;
-- verify SHA-256 against the official manifest;
-- support sample and full profiles;
-- resume interrupted downloads;
-- skip already uploaded files;
-- register every source object;
-- quarantine invalid or mismatched files.
+## PostgreSQL analytical path
+
+Initial `staging.silver_*` landing tables exist. The production loader is
+intentionally deferred until Silver identity/version lineage is finalized.
+Warehouse and mart transformations are planned through dbt after staging is
+stable.
+
+## Object storage
+
+```text
+bronze      immutable source files
+silver      cleaned/versioned Parquet datasets
+gold        future curated analytical/ML outputs
+quarantine  rejected or diagnostic payloads
+logs        persisted log artifacts when needed
+```
