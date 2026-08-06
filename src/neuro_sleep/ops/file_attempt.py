@@ -290,6 +290,11 @@ def finish_file_attempt_failed(
     attempt_id: FileAttemptId,
     error: BaseException,
 ) -> None:
+    error_message = str(error).strip()
+
+    if not error_message:
+        error_message = type(error).__name__
+
     _finish_file_attempt(
         attempt_id=attempt_id,
         status="failed",
@@ -297,7 +302,7 @@ def finish_file_attempt_failed(
         file_size_bytes=None,
         checksum_sha256=None,
         error_type=type(error).__name__,
-        error_message=str(error),
+        error_message=error_message,
     )
 
 

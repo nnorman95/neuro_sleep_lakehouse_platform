@@ -1,5 +1,8 @@
 import json
 from io import StringIO
+from unittest.mock import patch
+
+import neuro_sleep.observability.download_progress as download_progress
 
 from neuro_sleep.observability.download_progress import (
     DownloadProgressReporter,
@@ -20,17 +23,22 @@ def run_smoke_test() -> None:
         minimum_update_interval_seconds=0.0,
     )
 
-    reporter.start(
-        total_bytes=1000
-    )
+    with patch.object(
+        download_progress,
+        "format_console_timestamp",
+        return_value="18:30:00",
+    ):
+        reporter.start(
+            total_bytes=1000
+        )
 
-    reporter.update(
-        downloaded_bytes=500
-    )
+        reporter.update(
+            downloaded_bytes=500
+        )
 
-    reporter.complete(
-        downloaded_bytes=1000
-    )
+        reporter.complete(
+            downloaded_bytes=1000
+        )
 
     pretty_text = (
         pretty_output.getvalue()
@@ -56,9 +64,18 @@ def run_smoke_test() -> None:
             "Live line update is missing"
         )
 
+    if "18:30:00" not in pretty_text:
+        raise RuntimeError(
+            "Download progress did not use "
+            "the shared UTC timestamp"
+        )
+
     print("live_percentage_rendered=true")
     print("single_line_refresh_enabled=true")
     print("download_completion_rendered=true")
+    print(
+        "download_timestamp_utc=true"
+    )
 
     json_output = StringIO()
 
