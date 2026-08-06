@@ -20,6 +20,8 @@ contracts/staging_silver_channels.yml
 contracts/staging_silver_sleep_stage_intervals.yml
 contracts/staging_silver_sleep_stage_intervals_v2.yml
 contracts/staging_silver_sleep_stage_epochs.yml
+contracts/staging_silver_subjects.yml
+contracts/staging_silver_recording_contexts.yml
 ```
 
 ## 2. Active and Historical Staging Contracts
@@ -118,7 +120,8 @@ Every important relational contract should state:
 
 ## 6. Phase 6 Contract Work
 
-Before subject-aware Warehouse loads are implemented, add contracts for:
+The subject-aware staging contracts are implemented and registered as active
+v1 contracts:
 
 ```text
 staging.silver_subjects
@@ -163,10 +166,10 @@ Implemented:
 - registry-backed contracts for core operational tables;
 - active quality-check-results contract;
 - versioned staging recording and interval contracts;
+- active subject/context staging contracts;
 - explicit Silver Parquet schemas.
 
 Not implemented yet:
 
-- subject/context staging contracts;
 - Warehouse contracts;
 - dbt schema tests derived from Warehouse contracts.

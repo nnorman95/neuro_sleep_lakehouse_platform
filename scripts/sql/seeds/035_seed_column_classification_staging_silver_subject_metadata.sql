@@ -1,0 +1,86 @@
+insert into governance.column_classification (
+    table_schema,
+    table_name,
+    column_name,
+    data_layer,
+    classification_level,
+    contains_personal_data,
+    contains_health_data,
+    contains_direct_identifier,
+    sensitivity_reason,
+    access_policy,
+    masking_policy
+)
+select
+    'staging',
+    table_name,
+    column_name,
+    'staging',
+    classification_level,
+    contains_personal_data,
+    contains_health_data,
+    false,
+    sensitivity_reason,
+    access_policy,
+    masking_policy
+from (
+    values
+        ('silver_subjects', 'subject_key', 'confidential', true, true, 'Pseudonymous logical subject identity linked to health data.', 'restricted', 'none'),
+        ('silver_subjects', 'source_system', 'internal', false, false, 'External source-system identifier.', 'team_only', 'none'),
+        ('silver_subjects', 'dataset_version', 'internal', false, false, 'Source dataset version.', 'team_only', 'none'),
+        ('silver_subjects', 'collection', 'confidential', false, true, 'Subject-level Sleep-EDF collection membership.', 'restricted', 'none'),
+        ('silver_subjects', 'source_subject_id', 'restricted', true, true, 'Source participant identifier from a finite public health dataset.', 'restricted', 'redact'),
+        ('silver_subjects', 'source_subject_number', 'restricted', true, true, 'Source participant number that can be combined with other quasi-identifiers.', 'restricted', 'redact'),
+        ('silver_subjects', 'age_years', 'confidential', true, true, 'Exact subject age used in health-data analysis.', 'restricted', 'aggregate_only'),
+        ('silver_subjects', 'sex', 'confidential', true, true, 'Subject demographic attribute linked to health data.', 'restricted', 'aggregate_only'),
+        ('silver_subjects', 'source_bucket', 'internal', false, false, 'Bronze object-storage bucket.', 'team_only', 'none'),
+        ('silver_subjects', 'source_object_key', 'restricted', true, true, 'Lineage path to the source subject workbook.', 'restricted', 'redact'),
+        ('silver_subjects', 'metadata_input_fingerprint', 'confidential', false, true, 'Content identity of one subject-metadata publication.', 'restricted', 'none'),
+        ('silver_subjects', 'schema_version', 'internal', false, false, 'Silver subject-metadata schema version.', 'team_only', 'none'),
+        ('silver_subjects', 'transform_version', 'internal', false, false, 'Silver subject-metadata transformation version.', 'team_only', 'none'),
+        ('silver_subjects', 'silver_bucket', 'internal', false, false, 'Silver object-storage bucket.', 'team_only', 'none'),
+        ('silver_subjects', 'silver_output_prefix', 'restricted', true, true, 'Object prefix of a subject-level Silver metadata publication.', 'restricted', 'redact'),
+        ('silver_subjects', 'staging_load_run_id', 'internal', false, false, 'Operational lineage to the staging load run.', 'team_only', 'none'),
+        ('silver_subjects', 'loaded_at', 'internal', false, false, 'Staging load timestamp.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'recording_key', 'confidential', true, true, 'Logical recording identifier linked to a subject and sleep context.', 'restricted', 'none'),
+        ('silver_recording_contexts', 'subject_key', 'confidential', true, true, 'Pseudonymous subject identity linked to the recording context.', 'restricted', 'none'),
+        ('silver_recording_contexts', 'source_system', 'internal', false, false, 'External source-system identifier.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'dataset_version', 'internal', false, false, 'Source dataset version.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'collection', 'confidential', false, true, 'Recording-level Sleep-EDF collection membership.', 'restricted', 'none'),
+        ('silver_recording_contexts', 'night_number', 'confidential', true, true, 'Subject recording-night number.', 'restricted', 'aggregate_only'),
+        ('silver_recording_contexts', 'lights_off_seconds', 'confidential', true, true, 'Recording timing context that can contribute to re-identification.', 'restricted', 'aggregate_only'),
+        ('silver_recording_contexts', 'treatment', 'confidential', true, true, 'Placebo or temazepam treatment context for Sleep Telemetry.', 'restricted', 'aggregate_only'),
+        ('silver_recording_contexts', 'source_bucket', 'internal', false, false, 'Bronze object-storage bucket.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'source_object_key', 'restricted', true, true, 'Lineage path to the source recording-context workbook.', 'restricted', 'redact'),
+        ('silver_recording_contexts', 'metadata_input_fingerprint', 'confidential', false, true, 'Content identity of one recording-context metadata publication.', 'restricted', 'none'),
+        ('silver_recording_contexts', 'schema_version', 'internal', false, false, 'Silver recording-context schema version.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'transform_version', 'internal', false, false, 'Silver recording-context transformation version.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'silver_bucket', 'internal', false, false, 'Silver object-storage bucket.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'silver_output_prefix', 'restricted', true, true, 'Object prefix of a subject-aware Silver metadata publication.', 'restricted', 'redact'),
+        ('silver_recording_contexts', 'staging_load_run_id', 'internal', false, false, 'Operational lineage to the staging load run.', 'team_only', 'none'),
+        ('silver_recording_contexts', 'loaded_at', 'internal', false, false, 'Staging load timestamp.', 'team_only', 'none')
+) as subject_metadata_columns(
+    table_name,
+    column_name,
+    classification_level,
+    contains_personal_data,
+    contains_health_data,
+    sensitivity_reason,
+    access_policy,
+    masking_policy
+)
+on conflict (
+    table_schema,
+    table_name,
+    column_name
+)
+do update set
+    data_layer = excluded.data_layer,
+    classification_level = excluded.classification_level,
+    contains_personal_data = excluded.contains_personal_data,
+    contains_health_data = excluded.contains_health_data,
+    contains_direct_identifier = excluded.contains_direct_identifier,
+    sensitivity_reason = excluded.sensitivity_reason,
+    access_policy = excluded.access_policy,
+    masking_policy = excluded.masking_policy,
+    updated_at = now();

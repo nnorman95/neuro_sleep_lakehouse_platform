@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=12
+total=13
 
 
 run_test() {
@@ -30,7 +30,6 @@ run_test \
 run_test \
     "Check PostgreSQL connection" \
     "neuro_sleep.db.postgres"
-
 run_test \
     "Check MinIO object storage" \
     "neuro_sleep.storage.object_storage"
@@ -50,7 +49,6 @@ run_test \
 run_test \
     "Check quarantine payload pointer" \
     "neuro_sleep.quality.quarantine_payload_smoke"
-
 run_test \
     "Check quality-check result history" \
     "neuro_sleep.quality.check_results_smoke"
@@ -60,13 +58,16 @@ run_test \
     "neuro_sleep.staging.identity_schema_smoke"
 
 run_test \
+    "Check subject metadata staging schema" \
+    "neuro_sleep.staging.subject_metadata_schema_smoke"
+
+run_test \
     "Check production Bronze file writer" \
     "neuro_sleep.ingestion.bronze_file_writer_success_smoke"
 
 run_test \
     "Check Sleep-EDF checksum manifest" \
     "neuro_sleep.sources.sleep_edf_manifest_smoke"
-
 run_test \
     "Check Sleep-EDF source configuration" \
     "neuro_sleep.sources.sleep_edf"

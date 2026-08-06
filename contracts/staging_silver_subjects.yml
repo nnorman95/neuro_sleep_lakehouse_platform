@@ -1,0 +1,80 @@
+version: "v1"
+
+contract_name: "staging_silver_subjects_contract"
+
+table:
+  schema: "staging"
+  name: "silver_subjects"
+  layer: "staging"
+
+owner_role: "data_engineer"
+
+description: "Version-aware landing contract for normalized Silver subject metadata."
+
+grain: "One logical subject row in one concrete Silver subject-metadata publication."
+
+columns:
+  - {name: "subject_key", type: "text", nullable: false}
+  - {name: "source_system", type: "text", nullable: false}
+  - {name: "dataset_version", type: "text", nullable: false}
+  - {name: "collection", type: "text", nullable: false}
+  - {name: "source_subject_id", type: "text", nullable: false}
+  - {name: "source_subject_number", type: "smallint", nullable: false}
+  - {name: "age_years", type: "smallint", nullable: false}
+  - {name: "sex", type: "text", nullable: false}
+  - {name: "source_bucket", type: "text", nullable: false}
+  - {name: "source_object_key", type: "text", nullable: false}
+  - {name: "metadata_input_fingerprint", type: "text", nullable: false}
+  - {name: "schema_version", type: "text", nullable: false}
+  - {name: "transform_version", type: "text", nullable: false}
+  - {name: "silver_bucket", type: "text", nullable: false}
+  - {name: "silver_output_prefix", type: "text", nullable: false}
+  - {name: "staging_load_run_id", type: "uuid", nullable: false}
+  - {name: "loaded_at", type: "timestamptz", nullable: false}
+
+constraints:
+  primary_key:
+    - "subject_key"
+    - "metadata_input_fingerprint"
+
+  unique:
+    - ["subject_key", "metadata_input_fingerprint", "source_system", "dataset_version", "collection"]
+    - ["source_system", "dataset_version", "collection", "source_subject_id", "metadata_input_fingerprint"]
+    - ["silver_bucket", "silver_output_prefix", "subject_key"]
+
+  checks:
+    - "subject_key is a lowercase 64-character SHA-256 value"
+    - "metadata_input_fingerprint is a lowercase 64-character SHA-256 value"
+    - "collection in ('sleep-cassette', 'sleep-telemetry')"
+    - "source_subject_number >= 0"
+    - "age_years between 1 and 120"
+    - "sex in ('F', 'M')"
+
+relationships:
+  - column: "staging_load_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+lineage:
+  - "source_bucket"
+  - "source_object_key"
+  - "metadata_input_fingerprint"
+  - "schema_version"
+  - "transform_version"
+  - "silver_bucket"
+  - "silver_output_prefix"
+  - "staging_load_run_id"
+  - "loaded_at"
+
+compatibility:
+  initial_physical_contract: "Migration 033 creates the first relational landing table for Silver subjects."
+
+data_sensitivity:
+  contains_personal_data: true
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "redact"

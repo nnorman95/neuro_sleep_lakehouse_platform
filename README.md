@@ -107,11 +107,13 @@ staging.silver_recordings
 staging.silver_channels
 staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
+staging.silver_subjects
+staging.silver_recording_contexts
 ```
 
-The existing staging tables are structurally ready but currently empty. The
-production Silver-to-staging loader, subject/context staging tables, Warehouse
-Core tables, and dbt project are not implemented yet.
+The six staging tables are structurally ready but currently empty. Production
+Silver-to-staging loaders, Warehouse Core tables, and the dbt project are not
+implemented yet.
 
 ## Current production coverage
 
@@ -193,10 +195,10 @@ PYTHONPATH=src python scripts/run_silver_subject_metadata.py
 ## Validation status
 
 ```text
-Core smoke tests:        12/12
+Core smoke tests:        13/13
 Reliability smoke tests: 17/17
 Silver smoke tests:      24/24
-Total:                    53/53
+Total:                    54/54
 ```
 
 ## Completed milestones
@@ -218,11 +220,11 @@ warehouse.dim_sleep_stage
 warehouse.fact_sleep_epoch
 ```
 
-Before those models are built, Phase 6 must add:
+The subject/context staging structures, contracts, classifications, and
+focused schema smoke test are implemented. Before the Warehouse models are
+built, Phase 6 must add:
 
 ```text
-staging.silver_subjects
-staging.silver_recording_contexts
 production Silver-to-staging loaders
 ```
 
@@ -244,6 +246,7 @@ future scope and must not be created before trusted upstream datasets exist.
 - [`docs/extract_runbook.md`](docs/extract_runbook.md)
 - [`docs/edf_inspection.md`](docs/edf_inspection.md)
 - [`docs/decisions/001_silver_identity_and_lineage.md`](docs/decisions/001_silver_identity_and_lineage.md)
+- [`docs/decisions/002_warehouse_grain_and_version_selection.md`](docs/decisions/002_warehouse_grain_and_version_selection.md)
 
 Real EDF files, generated Parquet objects, credentials, and runtime logs are not
 committed to Git.

@@ -132,6 +132,8 @@ staging.silver_recordings
 staging.silver_channels
 staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
+staging.silver_subjects
+staging.silver_recording_contexts
 ```
 
 Migration `025` finalized version-aware recording identity and lineage. The
@@ -151,12 +153,14 @@ MinIO Silver metadata and epochs
   -> marts only after Warehouse stability
 ```
 
-Required new staging tables:
+Subject metadata staging tables implemented by migration `033`:
 
 ```text
 staging.silver_subjects
 staging.silver_recording_contexts
 ```
+
+Their production loader remains the next staging task.
 
 Initial Warehouse Core:
 
