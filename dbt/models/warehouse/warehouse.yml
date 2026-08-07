@@ -588,3 +588,59 @@ models:
           - type: not_null
         data_tests:
           - not_null
+
+  - name: dim_sleep_stage
+    description: >
+      Controlled sleep-stage reference dimension. Grain is one
+      source-preserving normalized Silver stage code. Fixed integer keys keep
+      Silver stage identity explicit while analytical_stage_code groups N4
+      with N3 for analytical use.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+
+    columns:
+      - name: sleep_stage_sk
+        description: Fixed explicit Warehouse key for the controlled stage row.
+        data_type: smallint
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - not_null
+          - unique
+
+      - name: silver_stage_code
+        description: Source-preserving normalized Silver stage code.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: unique
+          - type: check
+            expression: >
+              silver_stage_code in
+              ('W', 'N1', 'N2', 'N3', 'N4', 'REM', 'UNKNOWN', 'MOVEMENT')
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values: [W, N1, N2, N3, N4, REM, UNKNOWN, MOVEMENT]
+
+      - name: analytical_stage_code
+        description: >
+          Analytical grouping code. N4 maps to N3; UNKNOWN and MOVEMENT remain
+          explicit and are not silently mapped to ordinary scored sleep.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: check
+            expression: >
+              analytical_stage_code in
+              ('W', 'N1', 'N2', 'N3', 'REM', 'UNKNOWN', 'MOVEMENT')
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [W, N1, N2, N3, REM, UNKNOWN, MOVEMENT]
