@@ -303,6 +303,9 @@ The table preserves:
 ```text
 recording_id
 source_system
+dataset_version
+collection
+recording_key
 PSG and Hypnogram object locations
 psg_file_id
 hypnogram_file_id
@@ -333,6 +336,20 @@ source_system
 ```text
 silver_bucket + silver_output_prefix
 ```
+
+The logical identity fields are stored directly in staging so later Warehouse
+reconciliation can join to `staging.silver_recording_contexts` on:
+
+```text
+source_system
++ dataset_version
++ collection
++ recording_key
+```
+
+They are resolved by the existing Sleep-EDF source classification during the
+recording staging load, not reconstructed by ad hoc Warehouse SQL string
+parsing.
 
 ### 4.2 `staging.silver_channels`
 
