@@ -421,3 +421,170 @@ models:
           - type: not_null
         data_tests:
           - not_null
+
+  - name: dim_channel
+    description: >
+      Current-state recording-scoped channel dimension. Grain is one logical
+      normalized channel within one logical recording, using only channels from
+      the selected Silver recording representation.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+
+    columns:
+      - name: channel_sk
+        description: Stable deterministic Warehouse surrogate key.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - not_null
+          - unique
+
+      - name: recording_sk
+        description: Warehouse key of the parent logical recording.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_recording')
+                field: recording_sk
+
+      - name: silver_channel_id
+        description: Exact selected Silver channel identifier retained for lineage.
+        data_type: uuid
+        constraints:
+          - type: not_null
+          - type: unique
+        data_tests:
+          - not_null
+          - unique
+
+      - name: silver_recording_id
+        description: Selected concrete Silver recording representation.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_recording')
+                field: silver_recording_id
+
+      - name: position
+        description: One-based channel position within the selected recording.
+        data_type: smallint
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "position > 0"
+        data_tests:
+          - not_null
+
+      - name: source_label
+        description: Original EDF channel label.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: normalized_name
+        description: Normalized recording-scoped channel name.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: sampling_frequency_hz
+        description: Channel sampling frequency in hertz.
+        data_type: double precision
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "sampling_frequency_hz > 0"
+        data_tests:
+          - not_null
+
+      - name: physical_dimension
+        description: Optional EDF physical unit or dimension.
+        data_type: text
+
+      - name: physical_min
+        description: EDF physical minimum.
+        data_type: double precision
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: physical_max
+        description: EDF physical maximum.
+        data_type: double precision
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "physical_max > physical_min"
+        data_tests:
+          - not_null
+
+      - name: digital_min
+        description: EDF digital minimum.
+        data_type: integer
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: digital_max
+        description: EDF digital maximum.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "digital_max > digital_min"
+        data_tests:
+          - not_null
+
+      - name: samples_per_data_record
+        description: Number of samples stored per EDF data record for the channel.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "samples_per_data_record > 0"
+        data_tests:
+          - not_null
+
+      - name: prefiltering
+        description: Optional EDF prefiltering description.
+        data_type: text
+
+      - name: first_loaded_at
+        description: >
+          Staging timestamp of the selected concrete Silver recording
+          representation that contains the channel. Channel staging rows do
+          not carry an independent load timestamp.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: last_loaded_at
+        description: >
+          Staging timestamp of the selected concrete Silver recording
+          representation used as current channel-state lineage. It equals
+          first_loaded_at until independent channel load history exists.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
