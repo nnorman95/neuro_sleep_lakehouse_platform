@@ -1,0 +1,154 @@
+version: 2
+
+sources:
+  - name: staging
+    description: >
+      Verified PostgreSQL landing tables populated from current compatible
+      Silver Parquet publications. High-volume signal samples remain in MinIO.
+    database: "{{ env_var('POSTGRES_DB', 'neuro_sleep') }}"
+    schema: staging
+
+    tables:
+      - name: silver_subjects
+        columns:
+          - name: subject_key
+            data_tests: [not_null]
+          - name: metadata_input_fingerprint
+            data_tests: [not_null]
+          - name: source_system
+            data_tests: [not_null]
+          - name: dataset_version
+            data_tests: [not_null]
+          - name: collection
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [sleep-cassette, sleep-telemetry]
+          - name: sex
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [F, M]
+
+      - name: silver_recording_contexts
+        columns:
+          - name: recording_key
+            data_tests: [not_null]
+          - name: subject_key
+            data_tests: [not_null]
+          - name: metadata_input_fingerprint
+            data_tests: [not_null]
+          - name: source_system
+            data_tests: [not_null]
+          - name: dataset_version
+            data_tests: [not_null]
+          - name: collection
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [sleep-cassette, sleep-telemetry]
+
+      - name: silver_recordings
+        columns:
+          - name: recording_id
+            data_tests: [not_null, unique]
+          - name: source_system
+            data_tests: [not_null]
+          - name: dataset_version
+            data_tests: [not_null]
+          - name: collection
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [sleep-cassette, sleep-telemetry]
+          - name: recording_key
+            data_tests: [not_null]
+          - name: input_fingerprint
+            data_tests: [not_null]
+          - name: schema_version
+            data_tests: [not_null]
+          - name: transform_version
+            data_tests: [not_null]
+          - name: staging_load_run_id
+            data_tests: [not_null]
+
+      - name: silver_channels
+        columns:
+          - name: channel_id
+            data_tests: [not_null, unique]
+          - name: recording_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('staging', 'silver_recordings')
+                    field: recording_id
+          - name: position
+            data_tests: [not_null]
+          - name: normalized_name
+            data_tests: [not_null]
+          - name: sampling_frequency_hz
+            data_tests: [not_null]
+
+      - name: silver_sleep_stage_intervals
+        columns:
+          - name: interval_id
+            data_tests: [not_null, unique]
+          - name: recording_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('staging', 'silver_recordings')
+                    field: recording_id
+          - name: source_annotation_index
+            data_tests: [not_null]
+          - name: duration_seconds
+            data_tests: [not_null]
+          - name: normalized_stage
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [W, N1, N2, N3, N4, REM, UNKNOWN, MOVEMENT]
+          - name: overlap_status
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [inside_psg, outside_psg, partial_overlap]
+
+      - name: silver_sleep_stage_epochs
+        columns:
+          - name: epoch_id
+            data_tests: [not_null, unique]
+          - name: recording_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('staging', 'silver_recordings')
+                    field: recording_id
+          - name: source_interval_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('staging', 'silver_sleep_stage_intervals')
+                    field: interval_id
+          - name: epoch_number
+            data_tests: [not_null]
+          - name: start_seconds
+            data_tests: [not_null]
+          - name: duration_seconds
+            data_tests: [not_null]
+          - name: normalized_stage
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [W, N1, N2, N3, N4, REM, UNKNOWN, MOVEMENT]
