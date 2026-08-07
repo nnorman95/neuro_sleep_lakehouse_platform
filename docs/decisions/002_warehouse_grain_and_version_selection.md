@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted.
+Accepted; Phase 6 physical build semantics refined by ADR 003.
+
+ADR 003 supersedes the implementation-specific parts of this ADR where they conflict, especially implicit version replacement, cross-model transaction guarantees, deterministic Warehouse keys, and fail-closed current-version selection. The logical grains and identity distinctions established here remain accepted.
 
 ## Context
 

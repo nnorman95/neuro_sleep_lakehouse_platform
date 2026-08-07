@@ -488,15 +488,16 @@ warehouse.dim_sleep_stage
 warehouse.fact_sleep_epoch
 ```
 
-Staging preserves version-aware Silver history. The intended first Warehouse Core exposes one selected current Silver representation for each logical recording and does not add a separate Warehouse recording-version history table. This rule must be formalized in the Warehouse grain ADR before physical Warehouse tables are created.
+Staging preserves version-aware Silver history. The first Warehouse Core exposes one current analytical representation per logical recording and does not add a separate Warehouse recording-version history table. ADR 003 defines the physical key strategy, fail-closed version-selection rules, dbt materialization semantics, and build-consistency guarantees.
 
-If a newer approved Silver representation replaces the selected version, dependent channel and epoch rows must be replaced transactionally and idempotently.
+Until an explicit approved-version registry exists, Warehouse selection is fail-closed: more than one eligible metadata publication for a source collection or more than one eligible compatible Silver representation for one logical recording blocks the build instead of using an implicit latest-wins rule.
 
 ### 6.1 Logical ERD
 
 ```mermaid
 erDiagram
     DIM_SUBJECT ||--o{ DIM_RECORDING : has
+    DIM_SUBJECT ||--o{ FACT_SLEEP_EPOCH : describes
     DIM_RECORDING ||--o{ DIM_CHANNEL : contains
     DIM_RECORDING ||--o{ FACT_SLEEP_EPOCH : has
     DIM_SLEEP_STAGE ||--o{ FACT_SLEEP_EPOCH : classifies
@@ -514,7 +515,7 @@ erDiagram
 
 ### 6.3 Key strategy
 
-Warehouse surrogate keys use `_sk` so they are not confused with source, operational, or deterministic keys.
+Warehouse surrogate keys use `_sk` so they are not confused with source, operational, or Silver identifiers. ADR 003 requires deterministic Warehouse keys that remain stable across full dbt rebuilds.
 
 | Table | Warehouse key | Preserved identity |
 |---|---|---|
@@ -522,13 +523,13 @@ Warehouse surrogate keys use `_sk` so they are not confused with source, operati
 | `warehouse.dim_recording` | `recording_sk` | `recording_key`, `silver_recording_id` |
 | `warehouse.dim_channel` | `channel_sk` | `silver_channel_id` |
 | `warehouse.dim_sleep_stage` | `sleep_stage_sk` | `silver_stage_code` |
-| `warehouse.fact_sleep_epoch` | `silver_epoch_id` can serve as fact identity | `silver_recording_id`, `epoch_number` |
+| `warehouse.fact_sleep_epoch` | `sleep_epoch_sk` | `silver_epoch_id`, `silver_recording_id`, `epoch_number` |
 
-Surrogate keys never replace lineage fields.
+`subject_sk`, `recording_sk`, `channel_sk`, and `sleep_epoch_sk` are deterministic hashed engineering keys. `sleep_stage_sk` uses fixed explicit integer values for the controlled reference dimension. Surrogate keys never replace lineage fields.
 
 ## 7. Proposed Warehouse Table Designs
 
-Exact SQL types, defaults, and constraint names will be defined in migrations and data contracts.
+Exact SQL types, contracts, tests, and supported physical constraints are defined in dbt Warehouse models. PostgreSQL migrations remain responsible for operational and staging structures, not for dbt-managed Warehouse table replacement.
 
 ### 7.1 `warehouse.dim_subject`
 
@@ -686,9 +687,11 @@ Grain: one emitted 30-second epoch in the selected Silver recording representati
 Candidate columns:
 
 ```text
-silver_epoch_id
+sleep_epoch_sk
+subject_sk
 recording_sk
 sleep_stage_sk
+silver_epoch_id
 silver_recording_id
 source_interval_id
 source_annotation_index
@@ -704,13 +707,16 @@ loaded_at
 
 Rules:
 
-- `silver_epoch_id` preserves exact Silver epoch identity.
+- `sleep_epoch_sk` is the stable Warehouse fact identity derived from `recording_sk + epoch_number`.
+- `silver_epoch_id` preserves exact Silver epoch identity and remains lineage rather than logical fact identity.
 - `recording_sk + epoch_number` is unique in the current Warehouse state.
 - `silver_recording_id + epoch_number` is unique.
+- `subject_sk` directly references `dim_subject` for star-schema analysis.
+- The fact `subject_sk` must agree with the parent `dim_recording.subject_sk`.
 - `duration_seconds = 30.0`.
 - `start_seconds >= 0`.
 - `end_seconds > start_seconds`.
-- Every epoch resolves to one recording and one sleep-stage row.
+- Every epoch resolves to one subject, one recording, and one sleep-stage row.
 - Epochs are not multiplied by channel.
 - `source_interval_id` and `source_annotation_index` preserve annotation lineage.
 
@@ -819,18 +825,22 @@ loaded_at
 
 ### Epochs
 
-- Every epoch resolves to one recording and one sleep stage.
+- Every epoch resolves to one subject, one recording, and one sleep stage.
+- Fact `subject_sk` agrees with the subject attached to the same `recording_sk`.
 - Epoch number and start time are non-negative.
 - Duration is exactly 30 seconds.
-- Epoch numbers are unique within a recording.
+- `recording_sk + epoch_number` is unique.
+- `silver_recording_id + epoch_number` is unique for the selected representation.
 - Epochs do not exceed allowed PSG coverage.
 
-### Idempotency
+### Idempotency and publication safety
 
 - Re-running the same staging load inserts no duplicates.
-- Re-running Warehouse transformations creates no duplicate dimensions or facts.
-- Replacing the selected Silver version is transactional.
-- A failed replacement leaves the previous valid Warehouse state intact.
+- Re-running Warehouse transformations produces the same logical Warehouse keys and no duplicate dimensions or facts.
+- Warehouse selection does not use load order, timestamps, UUID ordering, or implicit latest-wins logic to choose an approved version.
+- Ambiguous eligible metadata publications or recording representations fail closed.
+- Each dbt table materialization uses its own database transaction semantics; Phase 6 does not claim one PostgreSQL transaction across the complete dbt DAG.
+- A failed `dbt build` is not treated as a successfully published Warehouse state.
 
 ## 11. Privacy and Access Boundary
 
@@ -883,9 +893,12 @@ MinIO Silver Parquet
 
 - declare PostgreSQL staging sources;
 - test uniqueness, non-null values, accepted values, and relationships;
-- reconcile logical recording keys with selected concrete Silver versions;
-- build dimensions and facts;
-- prevent duplicate current analytical representations.
+- enforce fail-closed metadata-publication and recording-representation selection;
+- reconcile logical recording keys with the single eligible concrete Silver representation;
+- generate deterministic Warehouse surrogate keys;
+- build contracted Warehouse dimensions and facts;
+- validate cross-model relationships and source-to-Warehouse reconciliation;
+- prevent duplicate or ambiguous current analytical representations.
 
 Implementation order:
 
