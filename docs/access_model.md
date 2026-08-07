@@ -127,8 +127,9 @@ access_policy
 masking_policy
 ```
 
-New subject/context staging and Warehouse migrations must be accompanied by
-matching classification seeds before those tables are considered complete.
+New subject-aware relational structures must be accompanied by matching
+classification seeds before those structures are considered complete. The
+current Warehouse Core satisfies this requirement for all 81 physical columns.
 
 ## 8. Current Status
 
@@ -138,9 +139,10 @@ Implemented:
 - restricted internal policy;
 - governance registries and column classification;
 - restricted handling guidance for patient-level Bronze and Silver data;
-- subject/context staging column classifications.
+- subject/context staging column classifications;
+- Warehouse Core classification for all 81 physical columns;
+- restricted/redacted handling for source subject identifiers;
+- aggregate-only policy for exact demographic/treatment fields where configured.
 
-Phase 6 requirement:
-
-- classify Warehouse dimensions and facts;
-- keep source identifiers out of broad marts by default.
+The remaining downstream rule is to keep source identifiers out of broad marts
+by default.

@@ -98,7 +98,9 @@ Gold  object-storage analytical datasets
 mart  PostgreSQL consumption models
 ```
 
-Neither should be built before Warehouse Core semantics are stable.
+The Warehouse Core semantics are now implemented and validated. Gold and mart
+outputs still require explicit downstream grains and trusted upstream feature or
+aggregate datasets before implementation.
 
 ## 7. Quarantine Layout
 

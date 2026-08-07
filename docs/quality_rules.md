@@ -149,9 +149,9 @@ UNKNOWN
 MOVEMENT
 ```
 
-Source Stage 3 and Stage 4 remain separate in Silver. An analytical Warehouse
-mapping may combine both into analytical `N3`, but the source-normalized value
-must remain traceable.
+Source Stage 3 and Stage 4 remain separate in Silver. The implemented
+`warehouse.dim_sleep_stage` maps both `N3` and `N4` to analytical `N3` while
+preserving the source-normalized stage code for traceability.
 
 Unsupported empty or unexpected labels are errors unless a documented rule maps
 them explicitly to `UNKNOWN`.
@@ -280,8 +280,13 @@ Implemented or required keys:
 | Sleep epoch | concrete `recording_id + epoch_number` |
 | Staged subject publication row | `subject_key + metadata_input_fingerprint` |
 | Staged recording context publication row | `source_system + dataset_version + collection + recording_key + metadata_input_fingerprint` |
+| Warehouse subject | `subject_sk`; `subject_key` unique |
+| Warehouse recording | `recording_sk`; logical recording business grain tested |
+| Warehouse channel | `recording_sk + normalized_name`; position also unique per recording |
+| Warehouse sleep epoch | `sleep_epoch_sk`; `recording_sk + epoch_number` unique |
 
-Warehouse duplicate rules will be finalized with Warehouse DDL.
+Warehouse duplicate rules are implemented as physical keys where appropriate and
+dbt singular/generic tests for cross-model and composite grains.
 
 ## 12. Warning and Error Examples
 
@@ -337,7 +342,7 @@ Implemented recording-dataset staging checks:
 - rerunning the loader creates no duplicates;
 - written and skipped loads finalize `ops.pipeline_run` correctly.
 
-Required Warehouse checks:
+Implemented Warehouse checks:
 
 - one row per documented dimension grain;
 - valid surrogate keys;
@@ -347,7 +352,13 @@ Required Warehouse checks:
 - epoch duration equals 30 seconds;
 - uniqueness of `silver_recording_id + epoch_number`;
 - subject and recording relationships are complete for loaded scope;
-- idempotent rebuild/load behavior.
+- idempotent full-rebuild behavior;
+- fail-closed metadata-publication and recording-representation selection;
+- bidirectional source-to-Warehouse reconciliation;
+- selected-stage coverage and controlled sleep-stage mapping;
+- per-recording channel and epoch count reconciliation.
+
+The current full dbt build passes 201/201 models/tests combined.
 
 ## 14. Future Quality Scope
 
@@ -371,15 +382,17 @@ make smoke
 make reliability-smoke
 make silver-smoke
 make test
+./scripts/run_dbt.sh build
 ```
 
 Current regression status:
 
 ```text
-Core:        15/15
-Reliability: 17/17
-Silver:      24/24
-Total:       56/56
+Core:          15/15
+Reliability:   17/17
+Silver:        24/24
+Python total:  56/56
+Warehouse dbt: 201/201
 ```
 
 ## 16. What Must Not Happen
@@ -408,13 +421,16 @@ Silver publication and reconciliation checks
 Subject metadata validation
 Subject metadata staging schema and loader validation
 Recording metadata staging schema and loader validation
+Warehouse Core schema and dimensional-grain checks
+Warehouse fail-closed selection gates
+Warehouse transformation relationship and reconciliation tests
+Warehouse dbt contracts and full-rebuild regression: 201/201
 Interruption and failure cleanup tests
 ```
 
 Next:
 
 ```text
-Warehouse Core schema and dimensional-grain checks
-Warehouse transformation relationship tests
-dbt/SQL tests where dbt adds real value
+mart/Gold quality rules only when downstream grains are defined
+signal-quality rules only after a trusted analytical signal-quality dataset exists
 ```

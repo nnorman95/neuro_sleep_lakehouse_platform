@@ -1,12 +1,12 @@
 # Data Model
 
-This document defines the current and planned data model for the NeuroSleep Lakehouse Platform at the start of **Phase 6: Warehouse Modeling**.
+This document defines the current and planned data model for the NeuroSleep Lakehouse Platform during **Phase 6: Warehouse Modeling**.
 
 It separates three states clearly:
 
-- **implemented** structures in Bronze, Silver, MinIO, and PostgreSQL;
-- the **Warehouse Core** to be built in Phase 6;
-- **future scope** that must not be implemented before a trusted upstream dataset exists.
+- **implemented** structures in Bronze, Silver, PostgreSQL staging, and the Warehouse Core;
+- **implemented governance and dbt validation** around the current Warehouse Core;
+- **future scope** that must not be implemented before a trusted upstream dataset and grain exist.
 
 The platform uses normalized relational modeling for operational, quality, governance, and staging data, and dimensional modeling for analytical warehouse and mart data.
 
@@ -476,9 +476,9 @@ loaded_at
 
 The table must enforce a valid relationship from each context `subject_key` to the corresponding staged subject publication.
 
-## 6. Phase 6 Warehouse Core Target
+## 6. Implemented Phase 6 Warehouse Core
 
-The proposed Warehouse Core contains:
+The implemented Warehouse Core contains:
 
 ```text
 warehouse.dim_subject
@@ -503,7 +503,7 @@ erDiagram
     DIM_SLEEP_STAGE ||--o{ FACT_SLEEP_EPOCH : classifies
 ```
 
-### 6.2 Proposed Warehouse grain
+### 6.2 Implemented Warehouse grain
 
 | Table | Grain |
 |---|---|
@@ -527,7 +527,7 @@ Warehouse surrogate keys use `_sk` so they are not confused with source, operati
 
 `subject_sk`, `recording_sk`, `channel_sk`, and `sleep_epoch_sk` are deterministic hashed engineering keys. `sleep_stage_sk` uses fixed explicit integer values for the controlled reference dimension. Surrogate keys never replace lineage fields.
 
-## 7. Proposed Warehouse Table Designs
+## 7. Implemented Warehouse Table Designs
 
 Exact SQL types, contracts, tests, and supported physical constraints are defined in dbt Warehouse models. PostgreSQL migrations remain responsible for operational and staging structures, not for dbt-managed Warehouse table replacement.
 
@@ -535,7 +535,7 @@ Exact SQL types, contracts, tests, and supported physical constraints are define
 
 Grain: one logical subject.
 
-Candidate columns:
+Columns:
 
 ```text
 subject_sk
@@ -565,7 +565,7 @@ Rules:
 
 Grain: one logical recording with one selected current Silver representation.
 
-Candidate columns:
+Columns:
 
 ```text
 recording_sk
@@ -620,7 +620,7 @@ Rules:
 
 Grain: one channel in the selected representation of one logical recording.
 
-Candidate columns:
+Columns:
 
 ```text
 channel_sk
@@ -653,16 +653,12 @@ Rules:
 
 Grain: one source-preserving normalized Silver stage code.
 
-Candidate columns:
+Columns:
 
 ```text
 sleep_stage_sk
 silver_stage_code
 analytical_stage_code
-display_name
-display_order
-is_sleep
-is_scored_sleep
 ```
 
 Expected mapping:
@@ -684,7 +680,7 @@ This preserves source Stage 3 and Stage 4 while allowing AASM-style analytical g
 
 Grain: one emitted 30-second epoch in the selected Silver recording representation.
 
-Candidate columns:
+Columns:
 
 ```text
 sleep_epoch_sk
@@ -900,16 +896,16 @@ MinIO Silver Parquet
 - validate cross-model relationships and source-to-Warehouse reconciliation;
 - prevent duplicate or ambiguous current analytical representations.
 
-Implementation order:
+Phase 6 implementation sequence completed for the current baseline:
 
 ```text
-1. approve Warehouse grain and identity rules
-2. create subject/context staging DDL and contracts
-3. implement the Silver-to-staging loader
-4. create dbt project, sources, and tests
-5. build Warehouse Core models
-6. validate idempotency, lineage, and row counts
-7. create marts and Gold outputs later
+1. Warehouse grain and identity rules approved
+2. subject/context staging DDL and contracts implemented
+3. Silver-to-staging loaders implemented
+4. dbt project, sources, selection gates, contracts, and tests implemented
+5. Warehouse Core models implemented
+6. rebuild safety, lineage, relationships, and row counts validated
+7. marts and Gold outputs remain later scope
 ```
 
 ## 13. Deferred Models
@@ -992,24 +988,30 @@ Bronze recovery, reconciliation, locking, and quality history implemented
 Silver recording pipeline implemented and tested
 Four Sleep Cassette recordings written
 One Sleep Telemetry recording written
-116,255,936 production Silver signal rows written
+116,242,840 production Silver signal rows written
 Silver subjects published with 100 subjects
 Silver recording_contexts published with 197 contexts
 Six Silver staging tables implemented
 Silver identity and lineage ADR accepted
 Warehouse grain and version-selection ADR accepted
+Warehouse physical/build semantics ADR accepted
+Warehouse Core implemented: 100 subjects / 5 recordings / 33 channels / 8 stages / 12,224 epochs
+dbt fail-closed selection, contracts, relationship tests, and reconciliation implemented
+Warehouse governance contracts active: 5 v1 contracts
+Warehouse column classifications implemented: 81/81 columns
 Durable quality-check history implemented
 Core, reliability, and Silver smoke suites passing: 56/56
+Warehouse dbt build passing: 201/201
 ```
 
 Not implemented yet:
 
 ```text
-Warehouse Core tables
-dbt project, models, and tests
 mart and Gold models
+deferred signal-quality and device-event analytical facts
+full-source production processing
 ```
 
-The relational staging path is complete for the current production scope.
-The next implementation task is Warehouse Core DDL and the transformation/test
-path that builds dimensions and facts from the verified staging datasets.
+The relational staging and Warehouse Core paths are complete for the current
+production baseline. Downstream models remain intentionally deferred until their
+analytical grains and upstream datasets are defined.

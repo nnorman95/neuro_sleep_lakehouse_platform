@@ -115,7 +115,9 @@ ST7011J
 ```
 
 The four Cassette recordings and one Telemetry recording produce
-116,255,936 Silver signal rows in total.
+116,242,840 Silver signal rows in total. Together with 13,096 recording-metadata
+rows (5 recordings, 33 channels, 834 intervals, and 12,224 epochs), the current
+Silver recording outputs contain 116,255,936 rows across those datasets.
 
 The subject workbooks are processed as complete metadata sources, so the
 subject publication covers all 100 source subjects and all 197 contexts rather

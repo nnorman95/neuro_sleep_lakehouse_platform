@@ -18,7 +18,7 @@ uses Python 3.13.5.
 |---|---|---|
 | `raw` | source-object registry and ingestion metadata | implemented |
 | `staging` | relational landing area for selected Silver datasets | subject and recording loaders implemented |
-| `warehouse` | dimensional analytical models | schema exists; tables not implemented |
+| `warehouse` | dimensional analytical models | five-table Warehouse Core implemented through dbt |
 | `mart` | consumption-ready relational models | schema exists; tables not implemented |
 | `ops` | pipeline execution and file-attempt history | implemented |
 | `quality` | quarantine and durable quality history | implemented |
@@ -364,19 +364,22 @@ transaction. All rows retain the metadata fingerprint, versions, Silver
 location, staging run ID, and load timestamp. An unchanged rerun is tracked as
 `skipped` and writes no duplicates.
 
-## 9. Planned Warehouse Core
+## 9. Implemented Warehouse Core
 
 ```text
-warehouse.dim_subject
-warehouse.dim_recording
-warehouse.dim_channel
-warehouse.dim_sleep_stage
-warehouse.fact_sleep_epoch
+warehouse.dim_subject          100 rows
+warehouse.dim_recording          5 rows
+warehouse.dim_channel           33 rows
+warehouse.dim_sleep_stage        8 rows
+warehouse.fact_sleep_epoch  12,224 rows
 ```
 
-The exact physical columns and constraints are defined in
-[`data_model.md`](data_model.md) and must be approved through a Warehouse identity
-ADR before implementation.
+The tables are dbt-managed full-rebuild relations rather than SQL-migration DDL.
+Their exact columns, supported physical constraints, deterministic key strategy,
+and fail-closed build semantics are defined by the dbt models, `data_model.md`,
+and ADR 003. Cross-model integrity is enforced through dbt relationship and
+reconciliation tests rather than hard PostgreSQL foreign keys between independently
+replaced dbt tables.
 
 `warehouse.fact_signal_quality` and device-event tables remain future scope.
 
@@ -420,10 +423,13 @@ The current manifest includes:
 026_create_quality_check_results.sql
 033_create_staging_silver_subject_metadata_tables.sql
 036_add_staging_recording_logical_identity.sql
+039_seed_data_contract_registry_warehouse_core.sql
+040_seed_column_classification_warehouse_core.sql
 ```
 
-Related governance seeds register the active contracts and column
-classifications.
+Seeds `039` and `040` register five active Warehouse v1 governance contracts and
+classify all 81 Warehouse columns. Warehouse table creation itself remains owned
+by dbt, not by the migration manifest.
 
 ## 12. Phase 6 Migration Rules
 

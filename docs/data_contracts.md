@@ -23,6 +23,11 @@ contracts/staging_silver_sleep_stage_intervals_v2.yml
 contracts/staging_silver_sleep_stage_epochs.yml
 contracts/staging_silver_subjects.yml
 contracts/staging_silver_recording_contexts.yml
+contracts/warehouse_dim_subject.yml
+contracts/warehouse_dim_recording.yml
+contracts/warehouse_dim_channel.yml
+contracts/warehouse_dim_sleep_stage.yml
+contracts/warehouse_fact_sleep_epoch.yml
 ```
 
 ## 2. Active and Historical Staging Contracts
@@ -135,7 +140,8 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-After Warehouse DDL is approved, add contracts for:
+The five Warehouse Core YAML contracts are also implemented and registered as
+active v1 contracts:
 
 ```text
 warehouse.dim_subject
@@ -144,6 +150,11 @@ warehouse.dim_channel
 warehouse.dim_sleep_stage
 warehouse.fact_sleep_epoch
 ```
+
+All 81 physical Warehouse columns have matching governance classifications.
+The dbt Warehouse models separately use enforced model contracts and schema/data
+tests; the YAML registry contracts remain the version-controlled governance
+record.
 
 Do not create contracts for `fact_signal_quality` or device-event models until
 trusted upstream datasets and exact grains exist.
@@ -175,9 +186,12 @@ Implemented:
 - versioned staging recording and interval contracts;
 - active Silver recording v3 contract with explicit logical identity;
 - active subject/context staging contracts;
+- five active Warehouse Core v1 governance contracts;
+- Warehouse column classification for all 81 physical columns;
+- enforced dbt model contracts plus Warehouse relationship/reconciliation tests;
 - explicit Silver Parquet schemas.
 
 Not implemented yet:
 
-- Warehouse contracts;
-- dbt schema tests derived from Warehouse contracts.
+- contracts for deferred signal-quality/device-event facts;
+- mart and Gold contracts.
