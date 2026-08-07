@@ -63,3 +63,20 @@ models:
         description: >
           Number of compatible representations for the logical recording.
           The Warehouse requires exactly one.
+
+  - name: int_selected_recording_representation
+    description: >
+      Valid current recording-representation surface. Rows are exposed only
+      when the fail-closed candidate gate has exactly one compatible
+      recording_id for the logical recording.
+    columns:
+      - name: source_system
+        description: Source system identifier.
+      - name: dataset_version
+        description: Source dataset version.
+      - name: collection
+        description: Sleep-EDF collection.
+      - name: recording_key
+        description: Logical recording or study-night identifier.
+      - name: recording_id
+        description: Selected concrete Silver recording representation.

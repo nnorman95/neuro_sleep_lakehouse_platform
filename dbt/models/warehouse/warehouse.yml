@@ -141,3 +141,283 @@ models:
           - type: not_null
         data_tests:
           - not_null
+
+  - name: dim_recording
+    description: >
+      Current-state recording dimension. Grain is one logical recording with
+      exactly one fail-closed selected Silver representation and exactly one
+      resolved recording context and subject.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+
+    columns:
+      - name: recording_sk
+        description: Stable deterministic Warehouse surrogate key.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - not_null
+          - unique
+
+      - name: recording_key
+        description: Logical recording or study-night identifier.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: subject_sk
+        description: Warehouse subject key resolved from selected metadata context.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subject')
+                field: subject_sk
+
+      - name: source_system
+        description: Source system identifier.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: dataset_version
+        description: Source dataset version.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: collection
+        description: Sleep-EDF collection.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "collection in ('sleep-cassette', 'sleep-telemetry')"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [sleep-cassette, sleep-telemetry]
+
+      - name: night_number
+        description: Study-night number from the selected recording context.
+        data_type: smallint
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: lights_off_seconds
+        description: Lights-off offset from the selected recording context.
+        data_type: integer
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: treatment
+        description: Optional treatment value from source recording metadata.
+        data_type: text
+
+      - name: silver_recording_id
+        description: Selected concrete Silver recording representation.
+        data_type: uuid
+        constraints:
+          - type: not_null
+          - type: unique
+        data_tests:
+          - not_null
+          - unique
+
+      - name: recording_start
+        description: Recording start timestamp preserved from Silver.
+        data_type: timestamp
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: duration_seconds
+        description: PSG recording duration in seconds.
+        data_type: double precision
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "duration_seconds > 0"
+        data_tests:
+          - not_null
+
+      - name: channel_count
+        description: Number of Silver channels in the selected representation.
+        data_type: smallint
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "channel_count > 0"
+        data_tests:
+          - not_null
+
+      - name: annotation_count
+        description: Number of source sleep-stage annotations.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "annotation_count >= 0"
+        data_tests:
+          - not_null
+
+      - name: in_range_epoch_count
+        description: Number of emitted epochs inside PSG coverage.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "in_range_epoch_count >= 0"
+        data_tests:
+          - not_null
+
+      - name: out_of_range_epoch_count
+        description: Number of annotation-derived epochs outside PSG coverage.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "out_of_range_epoch_count >= 0"
+        data_tests:
+          - not_null
+
+      - name: trailing_overhang_seconds
+        description: Unannotated or overhanging trailing duration in seconds.
+        data_type: double precision
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "trailing_overhang_seconds >= 0"
+        data_tests:
+          - not_null
+
+      - name: psg_file_id
+        description: Bronze PSG file identifier.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: hypnogram_file_id
+        description: Bronze Hypnogram file identifier.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: source_pair_id
+        description: Logical PSG/Hypnogram source-pair identifier.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: input_fingerprint
+        description: Exact verified source-pair input fingerprint.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: config_id
+        description: Canonical Silver transform configuration identifier.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: schema_version
+        description: Selected Silver schema version.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: transform_version
+        description: Selected Silver recording transform version.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: psg_checksum_sha256
+        description: Verified PSG source checksum.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: hypnogram_checksum_sha256
+        description: Verified Hypnogram source checksum.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: silver_bucket
+        description: Silver object bucket.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: silver_output_prefix
+        description: Versioned Silver output prefix.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: staging_load_run_id
+        description: Recording staging loader run identifier.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: first_loaded_at
+        description: Earliest accepted staging occurrence of the logical recording/context.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: last_loaded_at
+        description: Latest staging timestamp contributing to the selected current state.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
