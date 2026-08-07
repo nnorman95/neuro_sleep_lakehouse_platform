@@ -1,0 +1,67 @@
+
+with expected as (
+
+    select *
+    from (
+        values
+            (1::smallint, 'W'::text,        'W'::text),
+            (2::smallint, 'N1'::text,       'N1'::text),
+            (3::smallint, 'N2'::text,       'N2'::text),
+            (4::smallint, 'N3'::text,       'N3'::text),
+            (5::smallint, 'N4'::text,       'N3'::text),
+            (6::smallint, 'REM'::text,      'REM'::text),
+            (7::smallint, 'UNKNOWN'::text,  'UNKNOWN'::text),
+            (8::smallint, 'MOVEMENT'::text, 'MOVEMENT'::text)
+    ) as expected_mapping(
+        sleep_stage_sk,
+        silver_stage_code,
+        analytical_stage_code
+    )
+
+),
+
+actual as (
+
+    select
+        sleep_stage_sk,
+        silver_stage_code,
+        analytical_stage_code
+    from {{ ref('dim_sleep_stage') }}
+
+),
+
+missing_from_dimension as (
+
+    select *
+    from expected
+
+    except
+
+    select *
+    from actual
+
+),
+
+unexpected_in_dimension as (
+
+    select *
+    from actual
+
+    except
+
+    select *
+    from expected
+
+)
+
+select
+    'missing_from_dimension' as failure_type,
+    *
+from missing_from_dimension
+
+union all
+
+select
+    'unexpected_in_dimension' as failure_type,
+    *
+from unexpected_in_dimension
