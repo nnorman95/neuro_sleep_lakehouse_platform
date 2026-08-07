@@ -191,14 +191,25 @@ staging.silver_recording_contexts
 Migration `025_correct_staging_silver_identity_and_lineage.sql` has already
 applied the accepted version-aware identity and lineage design.
 
-The current local staging tables are empty. No production Silver-to-staging
-loader has been implemented yet.
+The production subject-metadata staging loader validates the current
+`_SUCCESS.json`, object inventory, file sizes, SHA-256 checksums, Parquet
+schemas, publication identity, and subject relationships. It loads both
+subject datasets in one PostgreSQL transaction and records the execution in
+`ops.pipeline_run`.
 
-Migration `033` adds the subject/context staging structures. Phase 6 must
-next add:
+Current staged subject metadata:
 
 ```text
-production Silver-to-staging loaders
+staging.silver_subjects: 100 rows
+staging.silver_recording_contexts: 197 rows
+orphan recording contexts: 0
+```
+
+An unchanged rerun is tracked as `skipped` and writes no duplicate rows. The
+four recording-related staging tables remain empty. Phase 6 must next add:
+
+```text
+production recording/channel/interval/epoch staging loader
 ```
 
 Then the Warehouse Core can be built:
@@ -237,7 +248,7 @@ Sleep Telemetry recordings: 1
 Production signal rows: 116,255,936
 Subjects: 100
 Recording contexts: 197
-Smoke tests: 54/54
+Smoke tests: 55/55
 ```
 
 Completed Bronze and Silver behavior must not be rebuilt during Warehouse

@@ -140,10 +140,10 @@ make test
 `make test` runs all three suites. Current verified result:
 
 ```text
-12/12 core
+14/14 core
 17/17 reliability
 24/24 Silver
-53/53 total
+55/55 total
 ```
 
 ## 9. Run Extract
@@ -177,7 +177,17 @@ Run subject metadata:
 PYTHONPATH=src python scripts/run_silver_subject_metadata.py
 ```
 
-Completed production outputs should return `skipped` on an unchanged rerun.
+Load the current subject metadata publication into PostgreSQL staging:
+
+```bash
+PYTHONPATH=src python scripts/load_subject_metadata_staging.py
+```
+
+The first staging load writes 100 subjects and 197 recording contexts. An
+unchanged rerun returns `skipped` with zero rows written.
+
+Completed Silver production outputs should also return `skipped` on an
+unchanged rerun.
 
 ## 11. Stop Services
 

@@ -278,8 +278,8 @@ Implemented or required keys:
 | Silver output location | `silver_bucket + silver_output_prefix` |
 | Recording channel | concrete `recording_id + channel position` |
 | Sleep epoch | concrete `recording_id + epoch_number` |
-| Subject | `subject_key` |
-| Recording context | `source_system + dataset_version + collection + recording_key` |
+| Staged subject publication row | `subject_key + metadata_input_fingerprint` |
+| Staged recording context publication row | `source_system + dataset_version + collection + recording_key + metadata_input_fingerprint` |
 
 Warehouse duplicate rules will be finalized with Warehouse DDL.
 
@@ -311,16 +311,25 @@ Errors include:
 
 ## 13. Phase 6 Staging and Warehouse Quality
 
-Required staging checks:
+Implemented subject-metadata staging checks:
 
-- manifest and object inventory match;
-- expected schema version is supported;
-- exact source and Silver lineage is populated;
-- subject/context parent relationships resolve;
-- recording context resolves to a logical recording;
+- `_SUCCESS.json` identity and object inventory match;
+- file sizes and SHA-256 checksums match the manifest;
+- exact Parquet schemas and row counts match;
+- source, publication, and Silver lineage are populated;
+- every recording context resolves to a staged subject;
+- both tables are written in one transaction;
+- rerunning the same publication creates no duplicates;
+- written and skipped loads finalize `ops.pipeline_run` correctly.
+
+Required recording-dataset staging checks:
+
+- recording publication manifest and object inventory match;
+- expected schema and transform versions are supported;
+- recording, channel, interval, and epoch lineage is populated;
+- recording context resolves to exactly one logical recording;
 - concrete `recording_id` relationships remain consistent;
 - rerunning the loader creates no duplicates;
-- row counts match source Parquet metadata;
 - failed loads finalize `ops.pipeline_run` correctly.
 
 Required Warehouse checks:
@@ -362,10 +371,10 @@ make test
 Current regression status:
 
 ```text
-Core:        12/12
+Core:        14/14
 Reliability: 17/17
 Silver:      24/24
-Total:       53/53
+Total:       55/55
 ```
 
 ## 16. What Must Not Happen
@@ -392,13 +401,14 @@ Silver warning and error semantics
 Durable quality.quality_check_results history
 Silver publication and reconciliation checks
 Subject metadata validation
+Subject metadata staging schema and loader validation
 Interruption and failure cleanup tests
 ```
 
 Next:
 
 ```text
-staging loader quality checks
-subject/context staging relationship checks
+recording/channel/interval/epoch staging loader quality checks
+recording-to-context reconciliation checks
 Warehouse Core dbt/SQL tests
 ```

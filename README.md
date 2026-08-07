@@ -111,9 +111,11 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-The six staging tables are structurally ready but currently empty. Production
-Silver-to-staging loaders, Warehouse Core tables, and the dbt project are not
-implemented yet.
+The production subject-metadata loader has populated
+`staging.silver_subjects` with 100 rows and
+`staging.silver_recording_contexts` with 197 rows. The four recording-related
+staging tables remain empty until their production loader is implemented.
+Warehouse Core tables and the dbt project are not implemented yet.
 
 ## Current production coverage
 
@@ -190,15 +192,16 @@ Production-oriented Silver commands:
 PYTHONPATH=src python scripts/plan_silver_batch.py
 PYTHONPATH=src python scripts/run_silver_batch.py
 PYTHONPATH=src python scripts/run_silver_subject_metadata.py
+PYTHONPATH=src python scripts/load_subject_metadata_staging.py
 ```
 
 ## Validation status
 
 ```text
-Core smoke tests:        13/13
+Core smoke tests:        14/14
 Reliability smoke tests: 17/17
 Silver smoke tests:      24/24
-Total:                    54/54
+Total:                    55/55
 ```
 
 ## Completed milestones
@@ -220,12 +223,12 @@ warehouse.dim_sleep_stage
 warehouse.fact_sleep_epoch
 ```
 
-The subject/context staging structures, contracts, classifications, and
-focused schema smoke test are implemented. Before the Warehouse models are
-built, Phase 6 must add:
+The subject/context staging structures, contracts, classifications,
+production loader, and loader smoke test are implemented. Before the Warehouse
+models are built, Phase 6 must add:
 
 ```text
-production Silver-to-staging loaders
+production recording/channel/interval/epoch staging loader
 ```
 
 `warehouse.fact_signal_quality`, device-event models, marts, and Gold outputs are

@@ -290,7 +290,9 @@ staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
 ```
 
-The production Silver-to-staging loader is not implemented yet.
+The production loader for recording, channel, interval, and epoch
+datasets is not implemented yet. The subject-metadata staging loader is
+implemented separately in Section 5.
 
 ### 4.1 `staging.silver_recordings`
 
@@ -376,8 +378,21 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-Their contracts, governance classifications, and focused schema smoke test are
-also implemented. The production loader remains pending.
+Their contracts, governance classifications, focused schema smoke test,
+and production staging loader are implemented.
+
+The current production publication loads:
+
+```text
+100 subject rows
+197 recording-context rows
+0 orphan recording contexts
+```
+
+The loader validates `_SUCCESS.json`, file sizes, SHA-256 checksums, exact
+Parquet schemas, publication lineage, and subject relationships. Both tables
+are written in one transaction. An unchanged publication is skipped without
+creating duplicates.
 
 ### 5.1 `staging.silver_subjects`
 
@@ -953,16 +968,18 @@ Six Silver staging tables implemented
 Silver identity and lineage ADR accepted
 Warehouse grain and version-selection ADR accepted
 Durable quality-check history implemented
-Core, reliability, and Silver smoke suites passing: 54/54
+Core, reliability, and Silver smoke suites passing: 55/55
 ```
 
 Not implemented yet:
 
 ```text
-production Silver-to-staging loader
+production Silver recording/channel/interval/epoch staging loader
 Warehouse Core tables
 dbt project, models, and tests
 mart and Gold models
 ```
 
-The next implementation task is the production Silver-to-staging loader for subject metadata, followed by the remaining recording metadata loaders and Warehouse Core DDL.
+The next implementation task is the production Silver staging loader for
+recordings, channels, annotation intervals, and emitted epochs. Warehouse Core
+DDL follows after the complete relational staging path is stable.
