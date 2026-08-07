@@ -322,15 +322,20 @@ Implemented subject-metadata staging checks:
 - rerunning the same publication creates no duplicates;
 - written and skipped loads finalize `ops.pipeline_run` correctly.
 
-Required recording-dataset staging checks:
+Implemented recording-dataset staging checks:
 
+- only current compatible Silver publications are selected;
+- legacy/incompatible publication versions are excluded;
 - recording publication manifest and object inventory match;
-- expected schema and transform versions are supported;
-- recording, channel, interval, and epoch lineage is populated;
-- recording context resolves to exactly one logical recording;
-- concrete `recording_id` relationships remain consistent;
+- object sizes and SHA-256 checksums match the manifest;
+- exact Parquet schemas and row counts match;
+- logical recording identity comes from canonical Sleep-EDF source classification;
+- recording, channel, interval, and epoch relationships remain consistent;
+- every staged recording resolves to recording context;
+- child rows have no orphan recording or interval relationships;
+- signal objects are not loaded into PostgreSQL;
 - rerunning the loader creates no duplicates;
-- failed loads finalize `ops.pipeline_run` correctly.
+- written and skipped loads finalize `ops.pipeline_run` correctly.
 
 Required Warehouse checks:
 
@@ -371,10 +376,10 @@ make test
 Current regression status:
 
 ```text
-Core:        14/14
+Core:        15/15
 Reliability: 17/17
 Silver:      24/24
-Total:       55/55
+Total:       56/56
 ```
 
 ## 16. What Must Not Happen
@@ -402,13 +407,14 @@ Durable quality.quality_check_results history
 Silver publication and reconciliation checks
 Subject metadata validation
 Subject metadata staging schema and loader validation
+Recording metadata staging schema and loader validation
 Interruption and failure cleanup tests
 ```
 
 Next:
 
 ```text
-recording/channel/interval/epoch staging loader quality checks
-recording-to-context reconciliation checks
-Warehouse Core dbt/SQL tests
+Warehouse Core schema and dimensional-grain checks
+Warehouse transformation relationship tests
+dbt/SQL tests where dbt adds real value
 ```

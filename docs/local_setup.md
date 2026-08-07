@@ -140,10 +140,10 @@ make test
 `make test` runs all three suites. Current verified result:
 
 ```text
-14/14 core
+15/15 core
 17/17 reliability
 24/24 Silver
-55/55 total
+56/56 total
 ```
 
 ## 9. Run Extract
@@ -183,8 +183,19 @@ Load the current subject metadata publication into PostgreSQL staging:
 PYTHONPATH=src python scripts/load_subject_metadata_staging.py
 ```
 
-The first staging load writes 100 subjects and 197 recording contexts. An
-unchanged rerun returns `skipped` with zero rows written.
+The first subject-metadata staging load writes 100 subjects and 197 recording
+contexts. An unchanged rerun returns `skipped` with zero rows written.
+
+Load current recording metadata into PostgreSQL staging:
+
+```bash
+PYTHONPATH=src python scripts/load_recording_staging.py
+```
+
+The current recording staging load writes 5 recordings, 33 channels,
+834 annotation intervals, and 12,224 epochs. It processes only the four
+metadata Parquet datasets for each current publication; signal samples remain
+in MinIO. An unchanged rerun returns `skipped`.
 
 Completed Silver production outputs should also return `skipped` on an
 unchanged rerun.

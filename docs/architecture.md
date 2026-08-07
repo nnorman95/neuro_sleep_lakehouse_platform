@@ -205,14 +205,30 @@ staging.silver_recording_contexts: 197 rows
 orphan recording contexts: 0
 ```
 
-An unchanged rerun is tracked as `skipped` and writes no duplicate rows. The
-four recording-related staging tables remain empty. Phase 6 must next add:
+An unchanged subject-metadata rerun is tracked as `skipped` and writes no
+duplicate rows.
+
+The recording staging loader selects only current compatible Silver
+publications, validates manifests, object sizes, SHA-256 checksums, exact
+Parquet schemas, logical recording identity, and parent/child relationships,
+and writes the four relational datasets transactionally.
+
+Current staged recording metadata:
 
 ```text
-production recording/channel/interval/epoch staging loader
+staging.silver_recordings: 5 rows
+staging.silver_channels: 33 rows
+staging.silver_sleep_stage_intervals: 834 rows
+staging.silver_sleep_stage_epochs: 12,224 rows
+orphan recording rows: 0
+unresolved recording contexts: 0
+legacy Silver recording versions loaded: 0
 ```
 
-Then the Warehouse Core can be built:
+An unchanged recording rerun is also tracked as `skipped`. The relational
+staging path required by the initial Warehouse Core is now complete.
+
+The Warehouse Core can now be built:
 
 ```text
 warehouse.dim_subject
@@ -248,7 +264,7 @@ Sleep Telemetry recordings: 1
 Production signal rows: 116,255,936
 Subjects: 100
 Recording contexts: 197
-Smoke tests: 55/55
+Smoke tests: 56/56
 ```
 
 Completed Bronze and Silver behavior must not be rebuilt during Warehouse

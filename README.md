@@ -111,11 +111,11 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-The production subject-metadata loader has populated
-`staging.silver_subjects` with 100 rows and
-`staging.silver_recording_contexts` with 197 rows. The four recording-related
-staging tables remain empty until their production loader is implemented.
-Warehouse Core tables and the dbt project are not implemented yet.
+Both production staging paths are implemented. Current PostgreSQL staging
+contains 100 subjects, 197 recording contexts, 5 recordings, 33 channels,
+834 source annotation intervals, and 12,224 emitted sleep-stage epochs.
+High-volume signal samples remain in MinIO. Warehouse Core tables and the dbt
+project are not implemented yet.
 
 ## Current production coverage
 
@@ -193,15 +193,16 @@ PYTHONPATH=src python scripts/plan_silver_batch.py
 PYTHONPATH=src python scripts/run_silver_batch.py
 PYTHONPATH=src python scripts/run_silver_subject_metadata.py
 PYTHONPATH=src python scripts/load_subject_metadata_staging.py
+PYTHONPATH=src python scripts/load_recording_staging.py
 ```
 
 ## Validation status
 
 ```text
-Core smoke tests:        14/14
+Core smoke tests:        15/15
 Reliability smoke tests: 17/17
 Silver smoke tests:      24/24
-Total:                    55/55
+Total:                    56/56
 ```
 
 ## Completed milestones
@@ -223,13 +224,10 @@ warehouse.dim_sleep_stage
 warehouse.fact_sleep_epoch
 ```
 
-The subject/context staging structures, contracts, classifications,
-production loader, and loader smoke test are implemented. Before the Warehouse
-models are built, Phase 6 must add:
-
-```text
-production recording/channel/interval/epoch staging loader
-```
+The subject/context and recording metadata staging structures, contracts,
+classifications, production loaders, and loader smoke tests are implemented.
+The relational staging path required by the initial Warehouse Core is now
+complete for the current production scope.
 
 `warehouse.fact_signal_quality`, device-event models, marts, and Gold outputs are
 future scope and must not be created before trusted upstream datasets exist.

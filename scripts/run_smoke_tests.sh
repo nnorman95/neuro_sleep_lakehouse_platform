@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=14
+total=15
 
 
 run_test() {
@@ -64,6 +64,10 @@ run_test \
 run_test \
     "Check subject metadata staging loader" \
     "neuro_sleep.staging.subject_metadata_loader_smoke"
+
+run_test \
+    "Check recording metadata staging loader" \
+    "neuro_sleep.staging.recording_loader_smoke"
 
 run_test \
     "Check production Bronze file writer" \
