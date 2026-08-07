@@ -1,0 +1,68 @@
+version: "v1"
+contract_name: "warehouse_fact_sleep_epoch_contract"
+table:
+  schema: "warehouse"
+  name: "fact_sleep_epoch"
+  layer: "warehouse"
+owner_role: "data_engineer"
+description: "Current-state Warehouse sleep-epoch fact built from emitted 30-second epochs in selected recording representations."
+grain: "One emitted 30-second sleep epoch in one selected logical recording representation."
+columns:
+  - {name: "sleep_epoch_sk", type: "text", nullable: false}
+  - {name: "subject_sk", type: "text", nullable: false}
+  - {name: "recording_sk", type: "text", nullable: false}
+  - {name: "sleep_stage_sk", type: "smallint", nullable: false}
+  - {name: "silver_epoch_id", type: "uuid", nullable: false}
+  - {name: "silver_recording_id", type: "uuid", nullable: false}
+  - {name: "source_interval_id", type: "uuid", nullable: false}
+  - {name: "source_annotation_index", type: "integer", nullable: false}
+  - {name: "epoch_number", type: "integer", nullable: false}
+  - {name: "start_seconds", type: "double precision", nullable: false}
+  - {name: "duration_seconds", type: "double precision", nullable: false}
+  - {name: "end_seconds", type: "double precision", nullable: false}
+  - {name: "source_label", type: "text", nullable: false}
+  - {name: "silver_stage_code", type: "text", nullable: false}
+  - {name: "staging_load_run_id", type: "uuid", nullable: false}
+  - {name: "loaded_at", type: "timestamptz", nullable: false}
+constraints:
+  primary_key: ["sleep_epoch_sk"]
+  unique:
+    - ["silver_epoch_id"]
+    - ["recording_sk", "epoch_number"]
+    - ["silver_recording_id", "epoch_number"]
+  checks:
+    - "epoch_number >= 0"
+    - "start_seconds >= 0"
+    - "duration_seconds = 30.0"
+    - "end_seconds > start_seconds"
+    - "silver_stage_code in ('W', 'N1', 'N2', 'N3', 'N4', 'REM', 'UNKNOWN', 'MOVEMENT')"
+relationships:
+  - column: "subject_sk"
+    references: {schema: "warehouse", table: "dim_subject", column: "subject_sk"}
+  - column: "recording_sk"
+    references: {schema: "warehouse", table: "dim_recording", column: "recording_sk"}
+  - column: "sleep_stage_sk"
+    references: {schema: "warehouse", table: "dim_sleep_stage", column: "sleep_stage_sk"}
+  - column: "silver_recording_id"
+    references: {schema: "warehouse", table: "dim_recording", column: "silver_recording_id"}
+  - column: "source_interval_id"
+    references: {schema: "staging", table: "silver_sleep_stage_intervals", column: "interval_id"}
+  - column: "staging_load_run_id"
+    references: {schema: "ops", table: "pipeline_run", column: "run_id"}
+lineage:
+  - "silver_epoch_id"
+  - "silver_recording_id"
+  - "source_interval_id"
+  - "source_annotation_index"
+  - "silver_stage_code"
+  - "staging_load_run_id"
+  - "loaded_at"
+compatibility:
+  initial_physical_contract: "dbt model warehouse.fact_sleep_epoch; deterministic fact identity and selected-representation semantics defined by ADR 003."
+data_sensitivity:
+  contains_personal_data: true
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "none"

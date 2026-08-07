@@ -1,0 +1,30 @@
+version: "v1"
+contract_name: "warehouse_dim_sleep_stage_contract"
+table:
+  schema: "warehouse"
+  name: "dim_sleep_stage"
+  layer: "warehouse"
+owner_role: "data_engineer"
+description: "Controlled sleep-stage reference dimension preserving Silver stage identity while exposing the analytical grouping."
+grain: "One source-preserving normalized Silver stage code."
+columns:
+  - {name: "sleep_stage_sk", type: "smallint", nullable: false}
+  - {name: "silver_stage_code", type: "text", nullable: false}
+  - {name: "analytical_stage_code", type: "text", nullable: false}
+constraints:
+  primary_key: ["sleep_stage_sk"]
+  unique:
+    - ["silver_stage_code"]
+  checks:
+    - "sleep_stage_sk uses the fixed values 1 through 8 defined by ADR 003"
+    - "silver_stage_code in ('W', 'N1', 'N2', 'N3', 'N4', 'REM', 'UNKNOWN', 'MOVEMENT')"
+    - "N4 maps to analytical_stage_code = 'N3'"
+compatibility:
+  initial_physical_contract: "dbt model warehouse.dim_sleep_stage; fixed controlled mapping defined by ADR 003."
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: false
+  contains_direct_identifier: false
+  classification_level: "internal"
+  access_policy: "team_only"
+  masking_policy: "none"

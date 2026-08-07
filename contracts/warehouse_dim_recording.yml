@@ -1,0 +1,105 @@
+version: "v1"
+
+contract_name: "warehouse_dim_recording_contract"
+
+table:
+  schema: "warehouse"
+  name: "dim_recording"
+  layer: "warehouse"
+
+owner_role: "data_engineer"
+
+description: "Current-state Warehouse recording dimension with one fail-closed selected Silver representation per logical recording."
+
+grain: "One logical recording with one selected current Silver representation."
+
+columns:
+  - {name: "recording_sk", type: "text", nullable: false}
+  - {name: "recording_key", type: "text", nullable: false}
+  - {name: "subject_sk", type: "text", nullable: false}
+  - {name: "source_system", type: "text", nullable: false}
+  - {name: "dataset_version", type: "text", nullable: false}
+  - {name: "collection", type: "text", nullable: false}
+  - {name: "night_number", type: "smallint", nullable: false}
+  - {name: "lights_off_seconds", type: "integer", nullable: false}
+  - {name: "treatment", type: "text", nullable: true}
+  - {name: "silver_recording_id", type: "uuid", nullable: false}
+  - {name: "recording_start", type: "timestamp", nullable: false}
+  - {name: "duration_seconds", type: "double precision", nullable: false}
+  - {name: "channel_count", type: "smallint", nullable: false}
+  - {name: "annotation_count", type: "integer", nullable: false}
+  - {name: "in_range_epoch_count", type: "integer", nullable: false}
+  - {name: "out_of_range_epoch_count", type: "integer", nullable: false}
+  - {name: "trailing_overhang_seconds", type: "double precision", nullable: false}
+  - {name: "psg_file_id", type: "uuid", nullable: false}
+  - {name: "hypnogram_file_id", type: "uuid", nullable: false}
+  - {name: "source_pair_id", type: "text", nullable: false}
+  - {name: "input_fingerprint", type: "text", nullable: false}
+  - {name: "config_id", type: "text", nullable: false}
+  - {name: "schema_version", type: "text", nullable: false}
+  - {name: "transform_version", type: "text", nullable: false}
+  - {name: "psg_checksum_sha256", type: "text", nullable: false}
+  - {name: "hypnogram_checksum_sha256", type: "text", nullable: false}
+  - {name: "silver_bucket", type: "text", nullable: false}
+  - {name: "silver_output_prefix", type: "text", nullable: false}
+  - {name: "staging_load_run_id", type: "uuid", nullable: false}
+  - {name: "first_loaded_at", type: "timestamptz", nullable: false}
+  - {name: "last_loaded_at", type: "timestamptz", nullable: false}
+
+logical_identity:
+  - "source_system"
+  - "dataset_version"
+  - "collection"
+  - "recording_key"
+
+constraints:
+  primary_key: ["recording_sk"]
+  unique:
+    - ["silver_recording_id"]
+    - ["source_system", "dataset_version", "collection", "recording_key"]
+  checks:
+    - "collection in ('sleep-cassette', 'sleep-telemetry')"
+    - "duration_seconds > 0"
+    - "channel_count > 0"
+    - "annotation_count >= 0"
+    - "in_range_epoch_count >= 0"
+    - "out_of_range_epoch_count >= 0"
+    - "trailing_overhang_seconds >= 0"
+
+relationships:
+  - column: "subject_sk"
+    references: {schema: "warehouse", table: "dim_subject", column: "subject_sk"}
+  - column: "psg_file_id"
+    references: {schema: "raw", table: "file_registry", column: "file_id"}
+  - column: "hypnogram_file_id"
+    references: {schema: "raw", table: "file_registry", column: "file_id"}
+  - column: "staging_load_run_id"
+    references: {schema: "ops", table: "pipeline_run", column: "run_id"}
+
+lineage:
+  - "silver_recording_id"
+  - "psg_file_id"
+  - "hypnogram_file_id"
+  - "source_pair_id"
+  - "input_fingerprint"
+  - "config_id"
+  - "schema_version"
+  - "transform_version"
+  - "psg_checksum_sha256"
+  - "hypnogram_checksum_sha256"
+  - "silver_bucket"
+  - "silver_output_prefix"
+  - "staging_load_run_id"
+  - "first_loaded_at"
+  - "last_loaded_at"
+
+compatibility:
+  initial_physical_contract: "dbt model warehouse.dim_recording; Phase 6 current-state and fail-closed selection semantics defined by ADR 003."
+
+data_sensitivity:
+  contains_personal_data: true
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "none"
