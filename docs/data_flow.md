@@ -137,8 +137,8 @@ staging.silver_recording_contexts
 ```
 
 Migration `025` finalized version-aware recording identity and lineage.
-The four recording-related staging tables remain empty because their production
-loader has not been implemented.
+Migration `036` added explicit `dataset_version`, `collection`, and
+`recording_key` columns for canonical logical recording reconciliation.
 
 The subject-metadata staging path is implemented:
 
@@ -155,6 +155,25 @@ subjects.parquet + recording_contexts.parquet + _SUCCESS.json
 
 An unchanged rerun is tracked as `skipped` and writes zero rows.
 
+The recording staging path is also implemented:
+
+```text
+5 current Silver recording publications
+  -> exclude legacy/incompatible publication versions
+  -> validate _SUCCESS.json and canonical logical identity
+  -> verify object sizes + SHA-256
+  -> exact Parquet-schema and row-count validation
+  -> PostgreSQL transaction
+  -> staging.silver_recordings: 5 rows
+  -> staging.silver_channels: 33 rows
+  -> staging.silver_sleep_stage_intervals: 834 rows
+  -> staging.silver_sleep_stage_epochs: 12,224 rows
+  -> ops.pipeline_run
+```
+
+Signal Parquet objects are not downloaded by the staging loader. An unchanged
+recording rerun is tracked as `skipped` and writes zero rows.
+
 ## 8. Planned Phase 6 Flow
 
 ```text
@@ -168,16 +187,19 @@ MinIO Silver metadata and epochs
   -> marts only after Warehouse stability
 ```
 
-Subject metadata staging tables and their production loader are
-implemented:
+Both required production staging paths are implemented:
 
 ```text
 staging.silver_subjects
 staging.silver_recording_contexts
+staging.silver_recordings
+staging.silver_channels
+staging.silver_sleep_stage_intervals
+staging.silver_sleep_stage_epochs
 ```
 
-The next staging task is the production loader for recordings, channels,
-annotation intervals, and emitted epochs.
+The next Phase 6 task is Warehouse Core implementation and its transformation
+tests.
 
 Initial Warehouse Core:
 

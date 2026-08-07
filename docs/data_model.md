@@ -290,9 +290,10 @@ staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
 ```
 
-The production loader for recording, channel, interval, and epoch
-datasets is not implemented yet. The subject-metadata staging loader is
-implemented separately in Section 5.
+The production loader for recording, channel, interval, and epoch datasets
+is implemented. It loads only current compatible Silver publications and keeps
+signal samples in MinIO. The subject-metadata staging loader is implemented
+separately in Section 5.
 
 ### 4.1 `staging.silver_recordings`
 
@@ -985,18 +986,17 @@ Six Silver staging tables implemented
 Silver identity and lineage ADR accepted
 Warehouse grain and version-selection ADR accepted
 Durable quality-check history implemented
-Core, reliability, and Silver smoke suites passing: 55/55
+Core, reliability, and Silver smoke suites passing: 56/56
 ```
 
 Not implemented yet:
 
 ```text
-production Silver recording/channel/interval/epoch staging loader
 Warehouse Core tables
 dbt project, models, and tests
 mart and Gold models
 ```
 
-The next implementation task is the production Silver staging loader for
-recordings, channels, annotation intervals, and emitted epochs. Warehouse Core
-DDL follows after the complete relational staging path is stable.
+The relational staging path is complete for the current production scope.
+The next implementation task is Warehouse Core DDL and the transformation/test
+path that builds dimensions and facts from the verified staging datasets.

@@ -17,7 +17,7 @@ uses Python 3.13.5.
 | Schema | Purpose | Current state |
 |---|---|---|
 | `raw` | source-object registry and ingestion metadata | implemented |
-| `staging` | relational landing area for selected Silver datasets | subject loader implemented; recording loaders pending |
+| `staging` | relational landing area for selected Silver datasets | subject and recording loaders implemented |
 | `warehouse` | dimensional analytical models | schema exists; tables not implemented |
 | `mart` | consumption-ready relational models | schema exists; tables not implemented |
 | `ops` | pipeline execution and file-attempt history | implemented |
@@ -226,9 +226,20 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-The four recording-related staging tables currently contain zero rows.
-The subject metadata tables contain the current verified production
-publication: 100 subjects and 197 recording contexts.
+The current verified production staging state is:
+
+```text
+staging.silver_subjects: 100 rows
+staging.silver_recording_contexts: 197 rows
+staging.silver_recordings: 5 rows
+staging.silver_channels: 33 rows
+staging.silver_sleep_stage_intervals: 834 rows
+staging.silver_sleep_stage_epochs: 12,224 rows
+```
+
+The five staged recordings resolve to subject recording contexts, contain no
+orphan child rows, and use only the current Silver transform version `1.1.0`.
+Signal samples remain in MinIO.
 
 ### `staging.silver_recordings`
 
