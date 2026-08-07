@@ -1,0 +1,14 @@
+neuro_sleep:
+  target: dev
+
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5433') | int }}"
+      user: "{{ env_var('POSTGRES_USER', 'neuro_sleep') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'neuro_sleep') }}"
+      schema: warehouse
+      threads: 4
+      connect_timeout: 10
