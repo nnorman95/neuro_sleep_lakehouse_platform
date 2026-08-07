@@ -644,3 +644,179 @@ models:
           - accepted_values:
               arguments:
                 values: [W, N1, N2, N3, REM, UNKNOWN, MOVEMENT]
+
+  - name: fact_sleep_epoch
+    description: >
+      Current-state sleep-epoch fact. Grain is one emitted 30-second epoch
+      from one selected Silver recording representation. Epochs remain
+      recording-level facts and are never multiplied by channel.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+
+    columns:
+      - name: sleep_epoch_sk
+        description: Stable deterministic Warehouse fact identity.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - not_null
+          - unique
+
+      - name: subject_sk
+        description: Direct star-schema reference to the logical subject.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subject')
+                field: subject_sk
+
+      - name: recording_sk
+        description: Warehouse key of the parent logical recording.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_recording')
+                field: recording_sk
+
+      - name: sleep_stage_sk
+        description: Controlled sleep-stage dimension key.
+        data_type: smallint
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_sleep_stage')
+                field: sleep_stage_sk
+
+      - name: silver_epoch_id
+        description: Exact Silver epoch identifier retained as lineage.
+        data_type: uuid
+        constraints:
+          - type: not_null
+          - type: unique
+        data_tests:
+          - not_null
+          - unique
+
+      - name: silver_recording_id
+        description: Concrete selected Silver recording representation.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_recording')
+                field: silver_recording_id
+
+      - name: source_interval_id
+        description: Silver source annotation interval identifier.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: source_annotation_index
+        description: Source annotation index preserved from Silver.
+        data_type: integer
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: epoch_number
+        description: Zero-based epoch number within the selected recording.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "epoch_number >= 0"
+        data_tests:
+          - not_null
+
+      - name: start_seconds
+        description: Epoch start offset from recording start.
+        data_type: double precision
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "start_seconds >= 0"
+        data_tests:
+          - not_null
+
+      - name: duration_seconds
+        description: Emitted epoch duration; Phase 6 requires exactly 30 seconds.
+        data_type: double precision
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "duration_seconds = 30.0"
+        data_tests:
+          - not_null
+
+      - name: end_seconds
+        description: Epoch end offset from recording start.
+        data_type: double precision
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "end_seconds > start_seconds"
+        data_tests:
+          - not_null
+
+      - name: source_label
+        description: Source-preserving annotation label.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: silver_stage_code
+        description: Source-preserving normalized Silver sleep-stage code.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: check
+            expression: >
+              silver_stage_code in
+              ('W', 'N1', 'N2', 'N3', 'N4', 'REM', 'UNKNOWN', 'MOVEMENT')
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [W, N1, N2, N3, N4, REM, UNKNOWN, MOVEMENT]
+
+      - name: staging_load_run_id
+        description: Staging load run of the selected Silver recording representation.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: loaded_at
+        description: >
+          Staging load timestamp of the selected Silver recording
+          representation. A dbt rebuild does not generate a new timestamp.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
