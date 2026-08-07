@@ -1,0 +1,62 @@
+version: "v1"
+
+contract_name: "warehouse_dim_subject_contract"
+
+table:
+  schema: "warehouse"
+  name: "dim_subject"
+  layer: "warehouse"
+
+owner_role: "data_engineer"
+
+description: "Current-state Warehouse subject dimension built from the selected compatible subject-metadata publication."
+
+grain: "One logical subject."
+
+columns:
+  - {name: "subject_sk", type: "text", nullable: false}
+  - {name: "subject_key", type: "text", nullable: false}
+  - {name: "source_system", type: "text", nullable: false}
+  - {name: "dataset_version", type: "text", nullable: false}
+  - {name: "collection", type: "text", nullable: false}
+  - {name: "age_years", type: "smallint", nullable: false}
+  - {name: "sex", type: "text", nullable: false}
+  - {name: "source_subject_id", type: "text", nullable: false}
+  - {name: "source_subject_number", type: "smallint", nullable: false}
+  - {name: "source_bucket", type: "text", nullable: false}
+  - {name: "source_object_key", type: "text", nullable: false}
+  - {name: "metadata_input_fingerprint", type: "text", nullable: false}
+  - {name: "first_loaded_at", type: "timestamptz", nullable: false}
+  - {name: "last_loaded_at", type: "timestamptz", nullable: false}
+
+constraints:
+  primary_key: ["subject_sk"]
+  unique:
+    - ["subject_key"]
+  checks:
+    - "collection in ('sleep-cassette', 'sleep-telemetry')"
+    - "age_years between 1 and 120"
+    - "sex in ('F', 'M')"
+    - "source_subject_number >= 0"
+
+lineage:
+  - "subject_key"
+  - "source_system"
+  - "dataset_version"
+  - "collection"
+  - "source_bucket"
+  - "source_object_key"
+  - "metadata_input_fingerprint"
+  - "first_loaded_at"
+  - "last_loaded_at"
+
+compatibility:
+  initial_physical_contract: "dbt model warehouse.dim_subject; Phase 6 current-state semantics defined by ADR 003."
+
+data_sensitivity:
+  contains_personal_data: true
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "redact"

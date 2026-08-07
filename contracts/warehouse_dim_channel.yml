@@ -1,0 +1,58 @@
+version: "v1"
+contract_name: "warehouse_dim_channel_contract"
+table:
+  schema: "warehouse"
+  name: "dim_channel"
+  layer: "warehouse"
+owner_role: "data_engineer"
+description: "Recording-scoped channel dimension for channels belonging to selected Warehouse recording representations."
+grain: "One normalized channel in one selected recording representation."
+columns:
+  - {name: "channel_sk", type: "text", nullable: false}
+  - {name: "recording_sk", type: "text", nullable: false}
+  - {name: "silver_channel_id", type: "uuid", nullable: false}
+  - {name: "silver_recording_id", type: "uuid", nullable: false}
+  - {name: "position", type: "smallint", nullable: false}
+  - {name: "source_label", type: "text", nullable: false}
+  - {name: "normalized_name", type: "text", nullable: false}
+  - {name: "sampling_frequency_hz", type: "double precision", nullable: false}
+  - {name: "physical_dimension", type: "text", nullable: true}
+  - {name: "physical_min", type: "double precision", nullable: false}
+  - {name: "physical_max", type: "double precision", nullable: false}
+  - {name: "digital_min", type: "integer", nullable: false}
+  - {name: "digital_max", type: "integer", nullable: false}
+  - {name: "samples_per_data_record", type: "integer", nullable: false}
+  - {name: "prefiltering", type: "text", nullable: true}
+  - {name: "first_loaded_at", type: "timestamptz", nullable: false}
+  - {name: "last_loaded_at", type: "timestamptz", nullable: false}
+constraints:
+  primary_key: ["channel_sk"]
+  unique:
+    - ["silver_channel_id"]
+    - ["recording_sk", "normalized_name"]
+    - ["recording_sk", "position"]
+  checks:
+    - "position > 0"
+    - "sampling_frequency_hz > 0"
+    - "physical_max > physical_min"
+    - "digital_max > digital_min"
+    - "samples_per_data_record > 0"
+relationships:
+  - column: "recording_sk"
+    references: {schema: "warehouse", table: "dim_recording", column: "recording_sk"}
+  - column: "silver_recording_id"
+    references: {schema: "warehouse", table: "dim_recording", column: "silver_recording_id"}
+lineage:
+  - "silver_channel_id"
+  - "silver_recording_id"
+  - "first_loaded_at"
+  - "last_loaded_at"
+compatibility:
+  initial_physical_contract: "dbt model warehouse.dim_channel; recording-scoped identity and selected-representation lineage defined by ADR 003."
+data_sensitivity:
+  contains_personal_data: true
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "none"
