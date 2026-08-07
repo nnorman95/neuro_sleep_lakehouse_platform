@@ -45,3 +45,8 @@ scripts/sql/seeds/028_seed_column_classification_quality_check_results.sql
 scripts/sql/migrations/033_create_staging_silver_subject_metadata_tables.sql
 scripts/sql/seeds/034_seed_data_contract_registry_staging_silver_subject_metadata.sql
 scripts/sql/seeds/035_seed_column_classification_staging_silver_subject_metadata.sql
+
+# Silver recording logical identity
+scripts/sql/migrations/036_add_staging_recording_logical_identity.sql
+scripts/sql/seeds/037_seed_staging_silver_recordings_contract_v3.sql
+scripts/sql/seeds/038_seed_staging_silver_recording_logical_identity_classification.sql

@@ -16,6 +16,7 @@ contracts/quality_check_results.yml
 contracts/governance_source_system_registry.yml
 contracts/staging_silver_recordings.yml
 contracts/staging_silver_recordings_v2.yml
+contracts/staging_silver_recordings_v3.yml
 contracts/staging_silver_channels.yml
 contracts/staging_silver_sleep_stage_intervals.yml
 contracts/staging_silver_sleep_stage_intervals_v2.yml
@@ -37,8 +38,14 @@ staging_silver_sleep_stage_intervals.yml
     historical v1 contracts; registry status = deprecated
 
 staging_silver_recordings_v2.yml
+    historical recording contract after migration 025; registry status = deprecated
+
 staging_silver_sleep_stage_intervals_v2.yml
-    active contracts after migration 025
+    active interval contract after migration 025
+
+staging_silver_recordings_v3.yml
+    active recording contract after migration 036; adds explicit
+    dataset_version + collection + recording_key logical identity
 ```
 
 The channel and epoch contracts did not require a separate v2 file because their
@@ -166,6 +173,7 @@ Implemented:
 - registry-backed contracts for core operational tables;
 - active quality-check-results contract;
 - versioned staging recording and interval contracts;
+- active Silver recording v3 contract with explicit logical identity;
 - active subject/context staging contracts;
 - explicit Silver Parquet schemas.
 

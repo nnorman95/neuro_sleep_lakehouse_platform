@@ -240,6 +240,19 @@ Primary key:
 recording_id
 ```
 
+Explicit logical recording identity:
+
+```text
+source_system
++ dataset_version
++ collection
++ recording_key
+```
+
+These columns are populated by the recording staging loader from the existing
+Sleep-EDF source classification. Warehouse SQL must not derive them by slicing
+object paths.
+
 Version-aware unique identity:
 
 ```text
@@ -266,9 +279,13 @@ hypnogram_file_id    -> raw.file_registry.file_id
 staging_load_run_id  -> ops.pipeline_run.run_id
 ```
 
-Migration `025_correct_staging_silver_identity_and_lineage.sql` has already
-implemented this design. It also removed the obsolete source-path-only
-uniqueness rule and permits negative source interval onset values.
+Migration `025_correct_staging_silver_identity_and_lineage.sql` implemented
+version-aware lineage, removed the obsolete source-path-only uniqueness rule,
+and permits negative source interval onset values.
+
+Migration `036_add_staging_recording_logical_identity.sql` adds the explicit
+`dataset_version`, `collection`, and `recording_key` columns plus a logical
+recording lookup index. The active recording contract is v3.
 
 ### `staging.silver_channels`
 
@@ -391,6 +408,7 @@ The current manifest includes:
 025_correct_staging_silver_identity_and_lineage.sql
 026_create_quality_check_results.sql
 033_create_staging_silver_subject_metadata_tables.sql
+036_add_staging_recording_logical_identity.sql
 ```
 
 Related governance seeds register the active contracts and column
