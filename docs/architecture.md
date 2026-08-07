@@ -1,7 +1,8 @@
 # Architecture
 
-This document describes the implemented platform architecture and the boundary
-of **Phase 6: Warehouse Modeling**.
+This document describes the implemented platform architecture and the current
+boundary of **Phase 6: Warehouse Modeling**. The initial Warehouse Core is now
+implemented for the current production baseline.
 
 ## 1. Active Source
 
@@ -61,6 +62,10 @@ PhysioNet
   -> versioned Parquet in MinIO Silver
   -> _SUCCESS.json
   -> reconciliation and durable quality history
+  -> PostgreSQL staging for selected Silver metadata/epochs
+  -> dbt fail-closed publication/representation selection
+  -> Warehouse Core dimensions + sleep-epoch fact
+  -> dbt relationship and reconciliation tests
 ```
 
 Operational execution is tracked through:
@@ -226,21 +231,22 @@ legacy Silver recording versions loaded: 0
 ```
 
 An unchanged recording rerun is also tracked as `skipped`. The relational
-staging path required by the initial Warehouse Core is now complete.
+staging path required by the initial Warehouse Core is complete.
 
-The Warehouse Core can now be built:
-
+The implemented Warehouse Core is:
 ```text
-warehouse.dim_subject
-warehouse.dim_recording
-warehouse.dim_channel
-warehouse.dim_sleep_stage
-warehouse.fact_sleep_epoch
+warehouse.dim_subject          100 rows
+warehouse.dim_recording          5 rows
+warehouse.dim_channel           33 rows
+warehouse.dim_sleep_stage        8 rows
+warehouse.fact_sleep_epoch  12,224 rows
 ```
 
-A dbt project may be introduced after the physical staging grain and loaders are
-stable. It must implement actual transformation and testing needs, not exist only
-as a decorative tool.
+The dbt project declares the staging sources, enforces fail-closed selection of
+one compatible metadata publication and recording representation, builds the
+five contracted Warehouse tables with deterministic keys, and validates
+relationships, grains, lineage, and source-to-Warehouse reconciliation. The
+current full dbt build passes 201/201 models/tests combined.
 
 ## 9. Scale Boundary
 
@@ -253,7 +259,7 @@ PostgreSQL should store:
 - source and object pointers.
 
 PostgreSQL should not store every raw signal sample. The current five production
-recordings already contain 116,255,936 Silver signal rows, which remain better
+recordings already contain 116,242,840 Silver signal rows, which remain better
 suited to Parquet in MinIO.
 
 ## 10. Current Production Baseline
@@ -261,10 +267,12 @@ suited to Parquet in MinIO.
 ```text
 Sleep Cassette recordings: 4
 Sleep Telemetry recordings: 1
-Production signal rows: 116,255,936
+Production signal rows: 116,242,840
 Subjects: 100
 Recording contexts: 197
-Smoke tests: 56/56
+Warehouse Core rows: 100 subjects / 5 recordings / 33 channels / 8 stages / 12,224 epochs
+Python smoke tests: 56/56
+Warehouse dbt build: 201/201
 ```
 
 Completed Bronze and Silver behavior must not be rebuilt during Warehouse

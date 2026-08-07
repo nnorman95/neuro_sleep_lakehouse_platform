@@ -1,7 +1,7 @@
 # Data Flow
 
-This document describes the implemented Bronze and Silver flows and the planned
-Phase 6 analytical path.
+This document describes the implemented Bronze, Silver, staging, and Phase 6
+Warehouse analytical flow.
 
 ## 1. Extract and Bronze
 
@@ -174,17 +174,18 @@ The recording staging path is also implemented:
 Signal Parquet objects are not downloaded by the staging loader. An unchanged
 recording rerun is tracked as `skipped` and writes zero rows.
 
-## 8. Planned Phase 6 Flow
+## 8. Implemented Phase 6 Analytical Flow
 
 ```text
 MinIO Silver metadata and epochs
   -> manifest validation
   -> tracked staging-load pipeline run
-  -> idempotent staging upsert/insert
-  -> staging quality and relationship tests
-  -> Warehouse Core dimensions and fact
-  -> dbt tests where dbt adds real value
-  -> marts only after Warehouse stability
+  -> idempotent PostgreSQL staging load
+  -> dbt staging source tests
+  -> fail-closed metadata publication / recording representation selection
+  -> deterministic Warehouse dimensions and sleep-epoch fact
+  -> dbt model contracts + grain + relationship + reconciliation tests
+  -> marts and Gold only after explicit downstream grains are defined
 ```
 
 Both required production staging paths are implemented:
@@ -198,23 +199,26 @@ staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
 ```
 
-The next Phase 6 task is Warehouse Core implementation and its transformation
-tests.
+The Warehouse Core implementation and its transformation tests are complete for
+the current production baseline.
 
-Initial Warehouse Core:
+Current Warehouse Core:
 
 ```text
-warehouse.dim_subject
-warehouse.dim_recording
-warehouse.dim_channel
-warehouse.dim_sleep_stage
-warehouse.fact_sleep_epoch
+warehouse.dim_subject          100 rows
+warehouse.dim_recording          5 rows
+warehouse.dim_channel           33 rows
+warehouse.dim_sleep_stage        8 rows
+warehouse.fact_sleep_epoch  12,224 rows
 ```
+
+The full dbt build currently passes 201/201 models/tests combined. High-volume
+signal samples never enter this relational path.
 
 ## 9. Scale Boundary
 
 Low-volume metadata and epochs may be loaded into PostgreSQL. The
-116,255,936 production signal rows remain in MinIO/Parquet.
+116,242,840 production signal rows remain in MinIO/Parquet.
 
 Future signal features may be written to Gold and loaded selectively into
 PostgreSQL only when their grain and analytical use are defined.
