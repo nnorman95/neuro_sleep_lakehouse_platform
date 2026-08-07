@@ -1,0 +1,143 @@
+version: 2
+
+models:
+  - name: dim_subject
+    description: >
+      Current-state subject dimension. Grain is one logical subject from the
+      single fail-closed selected metadata publication for its source
+      collection.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+
+    columns:
+      - name: subject_sk
+        description: Stable deterministic Warehouse surrogate key.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - not_null
+          - unique
+
+      - name: subject_key
+        description: Stable Silver logical subject business key.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: unique
+        data_tests:
+          - not_null
+          - unique
+
+      - name: source_system
+        description: Source system identifier.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: dataset_version
+        description: Source dataset version.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: collection
+        description: Sleep-EDF collection.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "collection in ('sleep-cassette', 'sleep-telemetry')"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [sleep-cassette, sleep-telemetry]
+
+      - name: age_years
+        description: Subject age in years from selected source metadata.
+        data_type: smallint
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "age_years between 1 and 120"
+        data_tests:
+          - not_null
+
+      - name: sex
+        description: Source-preserving normalized sex value.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "sex in ('F', 'M')"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [F, M]
+
+      - name: source_subject_id
+        description: Restricted source subject identifier retained for lineage.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: source_subject_number
+        description: Restricted numeric source subject identifier.
+        data_type: smallint
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "source_subject_number >= 0"
+        data_tests:
+          - not_null
+
+      - name: source_bucket
+        description: Bronze/source object bucket retained for lineage.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: source_object_key
+        description: Bronze/source object key retained for lineage.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: metadata_input_fingerprint
+        description: Selected Silver metadata publication fingerprint.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: first_loaded_at
+        description: Earliest accepted staging occurrence of the logical subject.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
+
+      - name: last_loaded_at
+        description: Staging load timestamp for the selected current subject state.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests:
+          - not_null
