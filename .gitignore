@@ -44,3 +44,6 @@ dbt/logs/
 *.part
 
 *.zip
+
+# Local dbt user state
+dbt/.user.yml
