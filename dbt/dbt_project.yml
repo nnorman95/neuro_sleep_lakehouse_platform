@@ -15,3 +15,8 @@ target-path: "target"
 clean-targets:
   - "target"
   - "dbt_packages"
+
+vars:
+  silver_schema_version: "1.0.0"
+  subject_metadata_transform_version: "1.0.0"
+  recording_transform_version: "1.1.0"

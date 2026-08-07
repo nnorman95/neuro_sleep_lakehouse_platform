@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: int_metadata_publication_candidates
+    description: >
+      Fail-closed candidate surface for current subject-metadata publications.
+      One source/dataset/collection is valid only when exactly one compatible
+      fingerprint is present in both subject and recording-context staging.
+    columns:
+      - name: source_system
+        description: Source system identifier.
+      - name: dataset_version
+        description: Source dataset version.
+      - name: collection
+        description: Sleep-EDF collection.
+      - name: metadata_input_fingerprint
+        description: Candidate Silver metadata publication fingerprint.
+      - name: subject_row_count
+        description: Subject rows present for this candidate publication.
+      - name: recording_context_row_count
+        description: Recording-context rows present for this candidate publication.
+      - name: eligible_publication_count
+        description: >
+          Number of compatible publication fingerprints for the
+          source/dataset/collection. The Warehouse requires exactly one.
+
+  - name: int_recording_representation_candidates
+    description: >
+      Fail-closed candidate surface for compatible Silver recording
+      representations. A logical recording is valid only when exactly one
+      compatible recording_id exists.
+    columns:
+      - name: source_system
+        description: Source system identifier.
+      - name: dataset_version
+        description: Source dataset version.
+      - name: collection
+        description: Sleep-EDF collection.
+      - name: recording_key
+        description: Logical recording or study-night identifier.
+      - name: recording_id
+        description: Candidate concrete Silver recording representation.
+      - name: eligible_representation_count
+        description: >
+          Number of compatible representations for the logical recording.
+          The Warehouse requires exactly one.
