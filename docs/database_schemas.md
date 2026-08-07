@@ -17,7 +17,7 @@ uses Python 3.13.5.
 | Schema | Purpose | Current state |
 |---|---|---|
 | `raw` | source-object registry and ingestion metadata | implemented |
-| `staging` | relational landing area for selected Silver datasets | schema implemented; loaders pending |
+| `staging` | relational landing area for selected Silver datasets | subject loader implemented; recording loaders pending |
 | `warehouse` | dimensional analytical models | schema exists; tables not implemented |
 | `mart` | consumption-ready relational models | schema exists; tables not implemented |
 | `ops` | pipeline execution and file-attempt history | implemented |
@@ -226,8 +226,9 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-The local tables currently contain zero rows because the production loader has
-not been implemented.
+The four recording-related staging tables currently contain zero rows.
+The subject metadata tables contain the current verified production
+publication: 100 subjects and 197 recording contexts.
 
 ### `staging.silver_recordings`
 
@@ -326,9 +327,14 @@ source_system
 ```
 
 The context table has a composite foreign key to the matching staged subject
-publication. Both tables are empty until the production subject-metadata
-staging loader is implemented. Their v1 contracts, column classifications, and
-focused schema smoke test are implemented.
+publication. Their v1 contracts, column classifications, schema smoke test,
+and production staging loader are implemented.
+
+The loader verifies the completed Silver publication, downloads and validates
+both Parquet files, and writes 100 subjects plus 197 recording contexts in one
+transaction. All rows retain the metadata fingerprint, versions, Silver
+location, staging run ID, and load timestamp. An unchanged rerun is tracked as
+`skipped` and writes no duplicates.
 
 ## 9. Planned Warehouse Core
 

@@ -136,9 +136,24 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-Migration `025` finalized version-aware recording identity and lineage. The
-current staging tables are empty because the production loader has not been
-implemented.
+Migration `025` finalized version-aware recording identity and lineage.
+The four recording-related staging tables remain empty because their production
+loader has not been implemented.
+
+The subject-metadata staging path is implemented:
+
+```text
+subjects.parquet + recording_contexts.parquet + _SUCCESS.json
+  -> publication identity validation
+  -> object-size and SHA-256 verification
+  -> exact Parquet-schema validation
+  -> one PostgreSQL transaction
+  -> staging.silver_subjects: 100 rows
+  -> staging.silver_recording_contexts: 197 rows
+  -> ops.pipeline_run
+```
+
+An unchanged rerun is tracked as `skipped` and writes zero rows.
 
 ## 8. Planned Phase 6 Flow
 
@@ -153,14 +168,16 @@ MinIO Silver metadata and epochs
   -> marts only after Warehouse stability
 ```
 
-Subject metadata staging tables implemented by migration `033`:
+Subject metadata staging tables and their production loader are
+implemented:
 
 ```text
 staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-Their production loader remains the next staging task.
+The next staging task is the production loader for recordings, channels,
+annotation intervals, and emitted epochs.
 
 Initial Warehouse Core:
 
