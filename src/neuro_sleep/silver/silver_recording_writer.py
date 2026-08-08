@@ -192,6 +192,7 @@ def write_silver_recording(
     ),
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
+    include_signals: bool = True,
     quality_report_handler: (
         QualityReportHandler | None
     ) = None,
@@ -324,72 +325,73 @@ def write_silver_recording(
                 SilverObjectWriteResult
             ] = []
 
-            for chunk in (
-                iter_recording_signal_chunks(
-                    recording_id=(
-                        bundle.recording_id
-                    ),
-                    channels=(
-                        bundle.channels
-                    ),
-                    psg_document=(
-                        pair.psg.document
-                    ),
-                    recording_duration_seconds=(
-                        bundle.recording
-                        .duration_seconds
-                    ),
-                    chunk_duration_seconds=(
-                        signal_chunk_duration_seconds
-                    ),
-                    start_seconds=(
-                        signal_start_seconds
-                    ),
-                    stop_seconds=(
-                        signal_stop_seconds
-                    ),
-                )
-            ):
-                signal_table = (
-                    signal_chunk_to_table(
-                        chunk
-                    )
-                )
-
-                object_key = (
-                    build_signal_object_key(
-                        output_prefix=(
-                            cleaned_prefix
+            if include_signals:
+                for chunk in (
+                    iter_recording_signal_chunks(
+                        recording_id=(
+                            bundle.recording_id
                         ),
-                        normalized_channel_name=(
-                            chunk
-                            .normalized_name
+                        channels=(
+                            bundle.channels
                         ),
-                        start_sample_index=(
-                            chunk
-                            .start_sample_index
+                        psg_document=(
+                            pair.psg.document
                         ),
-                        stop_sample_index=(
-                            chunk
-                            .stop_sample_index
+                        recording_duration_seconds=(
+                            bundle.recording
+                            .duration_seconds
+                        ),
+                        chunk_duration_seconds=(
+                            signal_chunk_duration_seconds
+                        ),
+                        start_seconds=(
+                            signal_start_seconds
+                        ),
+                        stop_seconds=(
+                            signal_stop_seconds
                         ),
                     )
-                )
+                ):
+                    signal_table = (
+                        signal_chunk_to_table(
+                            chunk
+                        )
+                    )
 
-                result = upload_silver_table(
-                    table=signal_table,
-                    bucket=silver_bucket,
-                    object_key=object_key,
-                    client=client,
-                )
+                    object_key = (
+                        build_signal_object_key(
+                            output_prefix=(
+                                cleaned_prefix
+                            ),
+                            normalized_channel_name=(
+                                chunk
+                                .normalized_name
+                            ),
+                            start_sample_index=(
+                                chunk
+                                .start_sample_index
+                            ),
+                            stop_sample_index=(
+                                chunk
+                                .stop_sample_index
+                            ),
+                        )
+                    )
 
-                signal_results.append(
-                    result
-                )
+                    result = upload_silver_table(
+                        table=signal_table,
+                        bucket=silver_bucket,
+                        object_key=object_key,
+                        client=client,
+                    )
 
-                uploaded_results.append(
-                    result
-                )
+                    signal_results.append(
+                        result
+                    )
+
+                    uploaded_results.append(
+                        result
+                    )
 
         return SilverRecordingWriteResult(
             bundle=bundle,

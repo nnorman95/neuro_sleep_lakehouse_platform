@@ -85,6 +85,7 @@ def canonical_transform_config_text(
     signal_chunk_duration_seconds: float,
     signal_start_seconds: float,
     signal_stop_seconds: float | None,
+    include_signals: bool = True,
 ) -> str:
     stop_text = (
         "full"
@@ -95,55 +96,33 @@ def canonical_transform_config_text(
         )
     )
 
-    return "\n".join(
-        (
-            (
-                "schema_version="
-                f"{SCHEMA_VERSION}"
-            ),
-            (
-                "transform_version="
-                f"{SILVER_TRANSFORM_VERSION}"
-            ),
-            (
-                "signal_chunk_duration_seconds="
-                f"{format(
-                    signal_chunk_duration_seconds,
-                    '.17g',
-                )}"
-            ),
-            (
-                "signal_start_seconds="
-                f"{format(
-                    signal_start_seconds,
-                    '.17g',
-                )}"
-            ),
-            (
-                "signal_stop_seconds="
-                f"{stop_text}"
-            ),
-        )
-    )
+    parts = [
+        f"schema_version={SCHEMA_VERSION}",
+        f"transform_version={SILVER_TRANSFORM_VERSION}",
+        "signal_chunk_duration_seconds="
+        f"{format(signal_chunk_duration_seconds, '.17g')}",
+        "signal_start_seconds="
+        f"{format(signal_start_seconds, '.17g')}",
+        f"signal_stop_seconds={stop_text}",
+    ]
+
+    if not include_signals:
+        parts.append("include_signals=false")
+
+    return "\n".join(parts)
 
 
 def build_config_id(
     signal_chunk_duration_seconds: float,
     signal_start_seconds: float,
     signal_stop_seconds: float | None,
+    include_signals: bool = True,
 ) -> str:
-    canonical_text = (
-        canonical_transform_config_text(
-            signal_chunk_duration_seconds=(
-                signal_chunk_duration_seconds
-            ),
-            signal_start_seconds=(
-                signal_start_seconds
-            ),
-            signal_stop_seconds=(
-                signal_stop_seconds
-            ),
-        )
+    canonical_text = canonical_transform_config_text(
+        signal_chunk_duration_seconds=signal_chunk_duration_seconds,
+        signal_start_seconds=signal_start_seconds,
+        signal_stop_seconds=signal_stop_seconds,
+        include_signals=include_signals,
     )
 
     return sha256(
@@ -297,6 +276,7 @@ def build_success_manifest(
     signal_chunk_duration_seconds: float,
     signal_start_seconds: float,
     signal_stop_seconds: float | None,
+    include_signals: bool = True,
 ) -> dict[str, object]:
     object_results = (
         *write_result.metadata_objects,
@@ -360,6 +340,7 @@ def build_success_manifest(
             "signal_stop_seconds": (
                 signal_stop_seconds
             ),
+            "include_signals": include_signals,
         },
         "quality": {
             "error_count": (
@@ -641,6 +622,7 @@ def write_silver_recording_idempotent(
     ),
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
+    include_signals: bool = True,
     quality_report_handler: (
         QualityReportHandler | None
     ) = None,
@@ -677,6 +659,7 @@ def write_silver_recording_idempotent(
         signal_stop_seconds=(
             signal_stop_seconds
         ),
+        include_signals=include_signals,
     )
 
     output_prefix = (
@@ -850,6 +833,7 @@ def write_silver_recording_idempotent(
                 signal_stop_seconds=(
                     signal_stop_seconds
                 ),
+                include_signals=include_signals,
                 quality_report_handler=(
                     quality_report_handler
                 ),
@@ -878,6 +862,7 @@ def write_silver_recording_idempotent(
             signal_stop_seconds=(
                 signal_stop_seconds
             ),
+            include_signals=include_signals,
         )
 
         try:

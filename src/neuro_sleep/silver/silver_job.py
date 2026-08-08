@@ -116,6 +116,7 @@ def run_tracked_silver_job(
     ),
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
+    include_signals: bool = True,
     verify_payload_checksums: bool = True,
     settings: Settings | None = None,
     client: BaseClient | None = None,
@@ -221,6 +222,7 @@ def run_tracked_silver_job(
             signal_stop_seconds=(
                 signal_stop_seconds
             ),
+            include_signals=include_signals,
             verify_payload_checksums=(
                 verify_payload_checksums
             ),
