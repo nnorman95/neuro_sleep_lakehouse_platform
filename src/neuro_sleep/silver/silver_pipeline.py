@@ -109,6 +109,7 @@ def run_silver_pipeline(
     ),
     signal_start_seconds: float = 0.0,
     signal_stop_seconds: float | None = None,
+    include_signals: bool = True,
     verify_payload_checksums: bool = True,
     quality_report_handler: (
         QualityReportHandler | None
@@ -142,6 +143,7 @@ def run_silver_pipeline(
                 signal_stop_seconds=(
                     signal_stop_seconds
                 ),
+                include_signals=include_signals,
                 quality_report_handler=(
                     quality_report_handler
                 ),

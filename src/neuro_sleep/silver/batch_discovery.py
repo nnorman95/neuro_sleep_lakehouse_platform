@@ -245,7 +245,35 @@ def build_recording_pairs(
         )
     )
 
-    if (
+    if settings.sleep_edf_recording_keys:
+        requested_recording_keys = set(
+            settings.sleep_edf_recording_keys
+        )
+        available_recording_keys = {
+            pair.recording_key
+            for pair in pairs
+        }
+
+        missing_recording_keys = sorted(
+            requested_recording_keys
+            - available_recording_keys
+        )
+
+        if missing_recording_keys:
+            raise RuntimeError(
+                "Requested Sleep-EDF recording "
+                "pairs are not uploaded: "
+                f"{missing_recording_keys}"
+            )
+
+        pairs = [
+            pair
+            for pair in pairs
+            if pair.recording_key
+            in requested_recording_keys
+        ]
+
+    elif (
         settings.data_profile == "sample"
         and settings.sleep_edf_max_recordings
         > 0

@@ -302,6 +302,7 @@ def select_sleep_edf_source_files(
     include_cassette: bool,
     include_telemetry: bool,
     include_metadata: bool,
+    recording_keys: tuple[str, ...] = (),
 ) -> list[SleepEdfSourceFile]:
     if max_recordings < 0:
         raise ValueError(
@@ -340,10 +341,33 @@ def select_sleep_edf_source_files(
         }
     )
 
-    if max_recordings == 0:
+    available_recording_key_set = set(
+        available_recording_keys
+    )
+
+    if recording_keys:
         selected_recording_keys = set(
-            available_recording_keys
+            recording_keys
         )
+
+        missing_recording_keys = sorted(
+            selected_recording_keys
+            - available_recording_key_set
+        )
+
+        if missing_recording_keys:
+            raise ValueError(
+                "Requested Sleep-EDF recording "
+                "keys are not available in the "
+                "enabled collections: "
+                f"{missing_recording_keys}"
+            )
+
+    elif max_recordings == 0:
+        selected_recording_keys = (
+            available_recording_key_set
+        )
+
     else:
         selected_recording_keys = set(
             available_recording_keys[
@@ -416,6 +440,9 @@ def build_sleep_edf_source_manifest(
         ),
         include_metadata=(
             settings.sleep_edf_include_metadata
+        ),
+        recording_keys=(
+            settings.sleep_edf_recording_keys
         ),
     )
 

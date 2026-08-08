@@ -42,6 +42,27 @@ def _get_bool_env(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be true or false")
 
 
+def _get_csv_env(name: str) -> tuple[str, ...]:
+    raw_value = os.getenv(name)
+
+    if raw_value is None or raw_value.strip() == "":
+        return ()
+
+    values: list[str] = []
+    seen: set[str] = set()
+
+    for item in raw_value.split(","):
+        value = item.strip()
+
+        if not value or value in seen:
+            continue
+
+        seen.add(value)
+        values.append(value)
+
+    return tuple(values)
+
+
 def _get_required_env(name: str) -> str:
     raw_value = os.getenv(name)
 
@@ -77,8 +98,15 @@ class Settings:
     sleep_edf_include_cassette: bool
     sleep_edf_include_telemetry: bool
     sleep_edf_include_metadata: bool
+    sleep_edf_recording_keys: tuple[str, ...] = ()
+    silver_include_signals: bool = True
 
-    def safe_dict(self) -> dict[str, str | int | bool]:
+    def safe_dict(
+        self,
+    ) -> dict[
+        str,
+        str | int | bool | tuple[str, ...],
+    ]:
         return {
             "project_name": self.project_name,
             "env": self.env,
@@ -97,6 +125,8 @@ class Settings:
             "sleep_edf_include_cassette": self.sleep_edf_include_cassette,
             "sleep_edf_include_telemetry": self.sleep_edf_include_telemetry,
             "sleep_edf_include_metadata": self.sleep_edf_include_metadata,
+            "sleep_edf_recording_keys": self.sleep_edf_recording_keys,
+            "silver_include_signals": self.silver_include_signals,
         }
 
 
@@ -134,6 +164,12 @@ def get_settings() -> Settings:
         ),
         sleep_edf_include_metadata=_get_bool_env(
             "SLEEP_EDF_INCLUDE_METADATA", True
+        ),
+        sleep_edf_recording_keys=_get_csv_env(
+            "SLEEP_EDF_RECORDING_KEYS"
+        ),
+        silver_include_signals=_get_bool_env(
+            "SILVER_INCLUDE_SIGNALS", True
         ),
     )
 

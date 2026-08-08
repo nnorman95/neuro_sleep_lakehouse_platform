@@ -248,6 +248,9 @@ def run_silver_batch(
                     signal_stop_seconds=(
                         signal_stop_seconds
                     ),
+                    include_signals=(
+                        settings.silver_include_signals
+                    ),
                     verify_payload_checksums=(
                         verify_payload_checksums
                     ),
