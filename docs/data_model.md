@@ -1,11 +1,11 @@
 # Data Model
 
-This document defines the current and planned data model for the NeuroSleep Lakehouse Platform during **Phase 6: Warehouse Modeling**.
+This document defines the current and planned data model for the NeuroSleep Lakehouse Platform through **Phase 7: Analytics Marts**.
 
 It separates three states clearly:
 
-- **implemented** structures in Bronze, Silver, PostgreSQL staging, and the Warehouse Core;
-- **implemented governance and dbt validation** around the current Warehouse Core;
+- **implemented** structures in Bronze, Silver, PostgreSQL staging, the Warehouse Core, and Phase 7 marts;
+- **implemented governance and dbt validation** around the current relational analytical path;
 - **future scope** that must not be implemented before a trusted upstream dataset and grain exist.
 
 The platform uses normalized relational modeling for operational, quality, governance, and staging data, and dimensional modeling for analytical warehouse and mart data.
@@ -162,7 +162,7 @@ recording_contexts.parquet
 _SUCCESS.json
 ```
 
-Current production output:
+Current output:
 
 ```text
 100 subjects
@@ -290,7 +290,7 @@ staging.silver_sleep_stage_intervals
 staging.silver_sleep_stage_epochs
 ```
 
-The production loader for recording, channel, interval, and epoch datasets
+The recording loader for recording, channel, interval, and epoch datasets
 is implemented. It loads only current compatible Silver publications and keeps
 signal samples in MinIO. The subject-metadata staging loader is implemented
 separately in Section 5.
@@ -387,7 +387,7 @@ recording_id + epoch_number
 
 Epoch `start_seconds` remains non-negative.
 
-## 5. Implemented Phase 6 Subject Metadata Staging
+## 5. Implemented Subject Metadata Staging
 
 Migration `033_create_staging_silver_subject_metadata_tables.sql` implements:
 
@@ -397,9 +397,9 @@ staging.silver_recording_contexts
 ```
 
 Their contracts, governance classifications, focused schema smoke test,
-and production staging loader are implemented.
+and staging loader are implemented.
 
-The current production publication loads:
+The current publication loads:
 
 ```text
 100 subject rows
@@ -476,7 +476,7 @@ loaded_at
 
 The table must enforce a valid relationship from each context `subject_key` to the corresponding staged subject publication.
 
-## 6. Implemented Phase 6 Warehouse Core
+## 6. Implemented Warehouse Core
 
 The implemented Warehouse Core contains:
 
@@ -835,7 +835,7 @@ loaded_at
 - Re-running Warehouse transformations produces the same logical Warehouse keys and no duplicate dimensions or facts.
 - Warehouse selection does not use load order, timestamps, UUID ordering, or implicit latest-wins logic to choose an approved version.
 - Ambiguous eligible metadata publications or recording representations fail closed.
-- Each dbt table materialization uses its own database transaction semantics; Phase 6 does not claim one PostgreSQL transaction across the complete dbt DAG.
+- Each dbt table materialization uses its own database transaction semantics; the project does not claim one PostgreSQL transaction across the complete dbt DAG.
 - A failed `dbt build` is not treated as a successfully published Warehouse state.
 
 ## 11. Privacy and Access Boundary
@@ -873,7 +873,7 @@ MinIO Silver Parquet
 -> PostgreSQL staging.silver_*
 -> dbt sources and tests
 -> dbt Warehouse dimensions and facts
--> marts after Warehouse Core stabilization
+-> Phase 7 analytical intermediates and marts
 ```
 
 ### Python staging loader responsibilities
@@ -893,19 +893,22 @@ MinIO Silver Parquet
 - reconcile logical recording keys with the single eligible concrete Silver representation;
 - generate deterministic Warehouse surrogate keys;
 - build contracted Warehouse dimensions and facts;
+- build reusable analytical intermediate models and contracted mart tables;
 - validate cross-model relationships and source-to-Warehouse reconciliation;
+- validate mart grains, percentages, boundaries, and aggregate reconciliation;
 - prevent duplicate or ambiguous current analytical representations.
 
-Phase 6 implementation sequence completed for the current baseline:
+The relational modeling sequence is now complete through Phase 7:
 
 ```text
 1. Warehouse grain and identity rules approved
 2. subject/context staging DDL and contracts implemented
 3. Silver-to-staging loaders implemented
-4. dbt project, sources, selection gates, contracts, and tests implemented
+4. dbt sources, fail-closed selection gates, contracts, and tests implemented
 5. Warehouse Core models implemented
-6. rebuild safety, lineage, relationships, and row counts validated
-7. marts and Gold outputs remain later scope
+6. analytical cohort expanded from 5 to 18 recordings without schema redesign
+7. reusable recording-level metric models implemented
+8. three Phase 7 marts implemented and reconciled back to Warehouse
 ```
 
 ## 13. Deferred Models
@@ -924,7 +927,7 @@ Deferred because no device-event source or Silver dataset exists.
 
 ### `warehouse.fact_recording_summary`
 
-Deferred until the core dimensions and epoch fact are stable. It should be derived from Warehouse Core rather than loaded directly from Silver unless a later requirement says otherwise.
+Not added as a separate Warehouse fact. The current recording-level summary is derived from the trusted Warehouse Core in `mart.mart_recording_sleep_summary`. A second recording-summary fact would duplicate the same grain without a current requirement.
 
 ### Signal-feature facts
 
@@ -934,20 +937,39 @@ Deferred to Gold or a later feature-processing phase. Future features require th
 
 Not required for the first Warehouse Core. Version history remains available in Silver object storage and version-aware staging tables. Add a separate history table only if future analytical requirements justify it.
 
-## 14. Mart Candidates
+## 14. Implemented Phase 7 Marts
 
-Marts are not implemented yet.
-
-Candidates:
+Phase 7 adds two reusable ephemeral dbt models:
 
 ```text
-mart.mart_subject_sleep_summary
-mart.mart_recording_sleep_summary
-mart.mart_sleep_stage_distribution
-mart.mart_ml_sleep_stage_features
+int_recording_stage_metrics
+int_recording_sleep_metrics
 ```
 
-Each mart must define its grain before implementation. ML-ready tables must also document feature versions, subject-based data splitting, and leakage prevention.
+and three physical PostgreSQL marts:
+
+| Table | Grain | Current rows | Purpose |
+|---|---|---:|---|
+| `mart.mart_recording_sleep_summary` | One logical recording | 18 | Recording-level sleep architecture and structural coverage |
+| `mart.mart_recording_stage_distribution` | One recording + one analytical stage | 126 | Long-format stage composition; complete 7-stage grid |
+| `mart.mart_dataset_coverage` | Source + dataset version + collection + night + treatment | 6 | Descriptive cohort/material coverage |
+
+Phase 7 uses analytical `N3` for both source `N3` and `N4`, while the source-preserving code remains available in Warehouse lineage. `UNKNOWN` and `MOVEMENT` stay explicit.
+
+The shared definitions are:
+
+```text
+scored time = W + N1 + N2 + N3 + REM
+sleep time  = N1 + N2 + N3 + REM
+annotation_coverage_pct = annotated_seconds / PSG duration
+sleep_pct_of_scored_time = sleep_seconds / scored_seconds
+```
+
+`sleep_pct_of_scored_time` is intentionally not named `sleep_efficiency`, because the current model does not claim a clinical time-in-bed definition. The marts also do not create arbitrary `usable` or research-quality flags.
+
+A subject-level sleep-summary mart is intentionally deferred. Telemetry subjects can have multiple nights and treatment conditions, so combining them requires an explicit analytical rule rather than an automatic average.
+
+See [`analytics_marts.md`](analytics_marts.md) for the full Phase 7 contract and formulas.
 
 ## 15. Naming Conventions
 
@@ -983,35 +1005,29 @@ duration_seconds
 Implemented:
 
 ```text
-Bronze ingestion complete for the current scope
-Bronze recovery, reconciliation, locking, and quality history implemented
-Silver recording pipeline implemented and tested
-Four Sleep Cassette recordings written
-One Sleep Telemetry recording written
-116,242,840 production Silver signal rows written
-Silver subjects published with 100 subjects
-Silver recording_contexts published with 197 contexts
-Six Silver staging tables implemented
-Silver identity and lineage ADR accepted
-Warehouse grain and version-selection ADR accepted
-Warehouse physical/build semantics ADR accepted
-Warehouse Core implemented: 100 subjects / 5 recordings / 33 channels / 8 stages / 12,224 epochs
-dbt fail-closed selection, contracts, relationship tests, and reconciliation implemented
-Warehouse governance contracts active: 5 v1 contracts
-Warehouse column classifications implemented: 81/81 columns
-Durable quality-check history implemented
-Core, reliability, and Silver smoke suites passing: 56/56
-Warehouse dbt build passing: 201/201
+Bronze ingestion, recovery, reconciliation, locking, and quality history
+Silver recording + subject-metadata pipelines
+Silver quality-gate quarantine routing and lifecycle
+Full-signal subset: 5 recordings / 116,242,840 signal rows
+Analytical cohort: 18 recordings / 9 represented subjects
+Silver subjects: 100 / recording contexts: 197
+PostgreSQL staging: 18 recordings / 110 channels / 3,263 intervals / 35,710 epochs
+Warehouse Core: 100 subjects / 18 recordings / 110 channels / 8 source stages / 35,710 epochs
+Fail-closed dbt version selection and deterministic Warehouse keys
+Warehouse governance contracts: 5 active v1 contracts / 81 of 81 columns classified
+Phase 7 analytical intermediates and three marts
+Mart rows: 18 recording summaries / 126 stage rows / 6 coverage rows
+Core + reliability + Silver smoke suites: 58/58
+Full dbt build: 257/257 PASS
 ```
 
 Not implemented yet:
 
 ```text
-mart and Gold models
+high-volume signal feature engineering and Gold feature models
 deferred signal-quality and device-event analytical facts
-full-source production processing
+broad BI/dashboard access
+full-source processing
 ```
 
-The relational staging and Warehouse Core paths are complete for the current
-production baseline. Downstream models remain intentionally deferred until their
-analytical grains and upstream datasets are defined.
+The relational path from verified Silver publications through staging, Warehouse, and descriptive marts is complete for the current analytical cohort. The next major scope is high-volume signal feature processing, not another relational redesign.

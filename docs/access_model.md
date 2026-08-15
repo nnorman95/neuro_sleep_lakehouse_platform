@@ -59,14 +59,16 @@ The fields intentionally describe different concepts.
 
 ### Default analytical identifiers
 
-Broad analytical models should use:
+Controlled analytical models should prefer:
 
 ```text
 subject_sk
-subject_key
 recording_sk
 recording_key
 ```
+
+`subject_key` remains available for controlled stable joins but is not exposed in
+the current Phase 7 marts.
 
 ### Restricted lineage identifiers
 
@@ -87,14 +89,20 @@ dataset.
 ## 5. Warehouse and Mart Rules
 
 `warehouse.dim_subject` may retain restricted lineage fields for controlled
-engineering and audit use, but downstream marts should omit them by default.
+engineering and audit use, but downstream marts should omit source subject IDs,
+source object keys, file UUIDs, and source checksums unless a concrete requirement
+needs them.
 
-Age and sex can be used in controlled analytical models. Broad outputs should
-prefer derived groups when the analytical question permits it, for example age
-bands instead of exact age.
+The current Phase 7 recording marts expose exact age, sex, night, and treatment
+context because those fields are needed for controlled analysis. They must
+therefore be treated as restricted analytical models, not as anonymous public
+outputs.
 
-Aggregates should be reviewed before broad publication when a grouping could
-isolate a very small number of subjects.
+`mart.mart_dataset_coverage` is aggregated, but some groups can contain a small
+number of subjects. It still requires review before broad publication.
+
+When data is prepared for wider access, prefer less identifying groupings (for
+example age bands) when the analytical question permits it.
 
 ## 6. Secrets and Credentials
 
@@ -127,9 +135,11 @@ access_policy
 masking_policy
 ```
 
-New subject-aware relational structures must be accompanied by matching
-classification seeds before those structures are considered complete. The
-current Warehouse Core satisfies this requirement for all 81 physical columns.
+Warehouse Core tables have registry-backed column classification for all 81
+physical columns. Phase 7 marts currently use enforced dbt contracts and inherit
+the restricted analytical policy from their Warehouse inputs. Dedicated mart
+registry classifications are intentionally deferred until the access/BI phase,
+before any broader publication is enabled.
 
 ## 8. Current Status
 
@@ -142,7 +152,9 @@ Implemented:
 - subject/context staging column classifications;
 - Warehouse Core classification for all 81 physical columns;
 - restricted/redacted handling for source subject identifiers;
-- aggregate-only policy for exact demographic/treatment fields where configured.
+- aggregate-only policy for exact demographic/treatment fields where configured;
+- Phase 7 marts that omit direct subject IDs and source-object lineage and remain restricted pending broader-access review.
 
-The remaining downstream rule is to keep source identifiers out of broad marts
-by default.
+Phase 7 marts are implemented and keep direct subject IDs and source-object lineage out. Their
+remaining access-governance work is explicit mart-level registry classification
+before BI or broader publication is enabled.
