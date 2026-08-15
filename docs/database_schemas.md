@@ -19,7 +19,7 @@ uses Python 3.13.5.
 | `raw` | source-object registry and ingestion metadata | implemented |
 | `staging` | relational landing area for selected Silver datasets | subject and recording loaders implemented |
 | `warehouse` | dimensional analytical models | five-table Warehouse Core implemented through dbt |
-| `mart` | consumption-ready relational models | schema exists; tables not implemented |
+| `mart` | consumption-ready relational models | three Phase 7 dbt marts implemented |
 | `ops` | pipeline execution and file-attempt history | implemented |
 | `quality` | quarantine and durable quality history | implemented |
 | `governance` | source registry, contracts, and classification | implemented |
@@ -228,19 +228,19 @@ staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-The current verified production staging state is:
+The current verified staging state is:
 
 ```text
 staging.silver_subjects: 100 rows
 staging.silver_recording_contexts: 197 rows
-staging.silver_recordings: 5 rows
-staging.silver_channels: 33 rows
-staging.silver_sleep_stage_intervals: 834 rows
-staging.silver_sleep_stage_epochs: 12,224 rows
+staging.silver_recordings: 18 rows
+staging.silver_channels: 110 rows
+staging.silver_sleep_stage_intervals: 3,263 rows
+staging.silver_sleep_stage_epochs: 35,710 rows
 ```
 
-The five staged recordings resolve to subject recording contexts, contain no
-orphan child rows, and use only the current Silver transform version `1.1.0`.
+All 18 staged recordings resolve to subject recording contexts, contain no
+orphan child rows, and use the current Silver recording transform version `1.1.0`.
 Signal samples remain in MinIO.
 
 ### `staging.silver_recordings`
@@ -358,7 +358,7 @@ source_system
 
 The context table has a composite foreign key to the matching staged subject
 publication. Their v1 contracts, column classifications, schema smoke test,
-and production staging loader are implemented.
+and staging loader are implemented.
 
 The loader verifies the completed Silver publication, downloads and validates
 both Parquet files, and writes 100 subjects plus 197 recording contexts in one
@@ -370,10 +370,10 @@ location, staging run ID, and load timestamp. An unchanged rerun is tracked as
 
 ```text
 warehouse.dim_subject          100 rows
-warehouse.dim_recording          5 rows
-warehouse.dim_channel           33 rows
+warehouse.dim_recording         18 rows
+warehouse.dim_channel          110 rows
 warehouse.dim_sleep_stage        8 rows
-warehouse.fact_sleep_epoch  12,224 rows
+warehouse.fact_sleep_epoch  35,710 rows
 ```
 
 The tables are dbt-managed full-rebuild relations rather than SQL-migration DDL.
@@ -385,7 +385,37 @@ replaced dbt tables.
 
 `warehouse.fact_signal_quality` and device-event tables remain future scope.
 
-## 10. SQL Execution
+## 10. Implemented Mart Tables
+
+Phase 7 creates three dbt-managed tables in the physical `mart` schema:
+
+```text
+mart.mart_recording_sleep_summary       18 rows
+mart.mart_recording_stage_distribution 126 rows
+mart.mart_dataset_coverage                6 rows
+```
+
+Grains:
+
+```text
+mart_recording_sleep_summary
+  one logical recording
+
+mart_recording_stage_distribution
+  one logical recording + one analytical stage
+
+mart_dataset_coverage
+  source_system + dataset_version + collection + night_number + treatment
+```
+
+The marts are owned by dbt rather than SQL migrations. `marts.yml` enforces their
+model contracts and generic tests; singular tests validate grains, percentages,
+boundaries, and reconciliation back to Warehouse.
+
+The recording-level marts include exact age/sex/night/treatment context and are
+therefore controlled analytical models rather than public anonymous extracts.
+
+## 11. SQL Execution
 
 SQL files are stored in:
 
@@ -415,7 +445,7 @@ Equivalent script:
 
 All migrations and seeds must be idempotent under the project runner.
 
-## 11. Current Migration Baseline
+## 12. Current Migration Baseline
 
 The current manifest includes:
 
@@ -427,15 +457,18 @@ The current manifest includes:
 036_add_staging_recording_logical_identity.sql
 039_seed_data_contract_registry_warehouse_core.sql
 040_seed_column_classification_warehouse_core.sql
+041_add_quality_quarantine_active_identity.sql
+042_seed_data_contract_registry_quality_quarantine_records_v2.sql
 ```
 
 Seeds `039` and `040` register five active Warehouse v1 governance contracts and
-classify all 81 Warehouse columns. Warehouse table creation itself remains owned
-by dbt, not by the migration manifest.
+classify all 81 Warehouse columns. Migration `041` adds the active quarantine
+identity index, and seed `042` activates the v2 quarantine contract. Warehouse
+and mart table creation remains owned by dbt, not by the migration manifest.
 
-## 12. Phase 6 Migration Rules
+## 13. Migration Rules
 
-New Phase 6 migrations must:
+New migrations must:
 
 - preserve completed Bronze and Silver behavior;
 - define grain and keys before columns are finalized;

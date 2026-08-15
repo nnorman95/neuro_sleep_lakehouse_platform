@@ -1,13 +1,33 @@
 # NeuroSleep Lakehouse Platform
 
-NeuroSleep is a local data engineering platform for ingesting, validating,
-storing, transforming, and analyzing sleep-neuroscience data.
+NeuroSleep is a local lakehouse-style data engineering platform built around
+sleep-neuroscience data. It ingests source files from PhysioNet, keeps the raw
+objects immutable, creates validated Silver Parquet datasets, loads relational
+metadata into PostgreSQL, and builds analytical models with dbt.
 
-The active source is **Sleep-EDF Database Expanded v1.0.0** from PhysioNet.
-The project contains completed Bronze ingestion and Silver transformation scopes.
-The active development stage is **Phase 6: Warehouse Modeling**. The initial
-Warehouse Core, dbt transformation/test layer, and Warehouse governance metadata
-are implemented for the current production baseline.
+The current branch implements **Phase 7: Analytics Marts** on top of the completed
+Warehouse Core. The relational analytical path now covers 18 Sleep-EDF recordings
+and exposes three consumption-ready marts for recording summaries, sleep-stage
+distribution, and dataset coverage.
+
+## Current state
+
+```text
+Source dataset:                 Sleep-EDF Database Expanded v1.0.0
+Source system:                  physionet_sleep_edf
+Collections:                    sleep-cassette, sleep-telemetry
+Subject metadata:               100 subjects / 197 recording contexts
+Analytical cohort:              18 recordings / 9 represented subjects
+Staged recording metadata:      110 channels / 3,263 intervals / 35,710 epochs
+Warehouse:                      100 subjects / 18 recordings / 110 channels / 35,710 epochs
+Analytical marts:               18 summary rows / 126 stage rows / 6 coverage rows
+Full-signal subset:             5 recordings / 116,242,840 Silver signal rows
+```
+
+The analytical cohort is larger than the full-signal subset on purpose. Phase 7
+only needs recording metadata and sleep-stage epochs, so 13 additional recordings
+were processed without generating signal Parquet. This expands analytical
+coverage without doing expensive work that the current models do not use.
 
 ## Architecture
 
@@ -16,16 +36,14 @@ PhysioNet Sleep-EDF
         |
         v
 Python Extract
-manifest parsing + streaming HTTP + SHA-256 verification
+streaming HTTP + source manifest + SHA-256 verification
         |
         v
 MinIO Bronze
-immutable source objects
+immutable EDF/XLS source objects
         |
         +--> raw.file_registry
-        +--> ops.pipeline_run
-        +--> ops.file_attempt
-        +--> quality.quarantine_records
+        +--> ops.pipeline_run / ops.file_attempt
         |
         v
 Python / edfio / NumPy / PyArrow
@@ -37,130 +55,138 @@ versioned Parquet + ZSTD + _SUCCESS.json
         |
         +--> recordings / channels / intervals / epochs
         +--> subjects / recording_contexts
-        +--> high-volume signal samples
+        +--> signal samples for the full-signal subset
         |
         v
 PostgreSQL staging
-selected Silver relational landing
+verified relational landing for current Silver publications
         |
         v
 dbt Warehouse Core
-fail-closed selection + dimensions + epoch fact
+fail-closed selection + deterministic dimensions + epoch fact
         |
         v
-Mart and Gold outputs
-future downstream scope
+dbt Analytics Marts
+recording summary + stage distribution + dataset coverage
 ```
 
-PostgreSQL stores operational metadata, lineage, quality history, staging
-records, and the current analytical dimensions and epoch fact. High-volume signal
-samples remain in MinIO/Parquet instead of being loaded into PostgreSQL row by row.
+High-volume signal samples stay in MinIO/Parquet. PostgreSQL is used for
+operational metadata, lineage, quality history, staging data, dimensional models,
+and relational analytics.
 
-## Implemented
+## Engineering decisions
+
+A few design choices are deliberate:
+
+- **Raw data stays immutable.** Bronze objects are checksum-verified and never
+  rewritten to hide source problems.
+- **Processing is idempotent.** Completed Bronze/Silver objects and unchanged
+  staging publications are skipped safely instead of being duplicated.
+- **Version selection fails closed.** If more than one compatible current Silver
+  representation exists for a logical recording, dbt does not guess which one is
+  “latest”. The build is blocked until the ambiguity is resolved.
+- **Data-quality failures and runtime failures are separated.** Silver quality-gate
+  failures create or refresh a quarantine incident. Network, database, storage,
+  and code failures remain operational failures rather than being mislabeled as
+  bad data.
+- **Large signal data is kept out of PostgreSQL.** The 116M+ signal rows in the
+  current full-signal subset remain columnar Parquet in MinIO.
+- **Analytics preserve source meaning.** Source `N3` and `N4` stay distinct in
+  Silver/Warehouse lineage; analytical marts group both as `N3`. `UNKNOWN` and
+  `MOVEMENT` remain explicit.
+- **No scientific threshold is invented by the pipeline.** Marts report coverage
+  and descriptive sleep metrics, but they do not mark a recording “good”, “bad”,
+  or “usable” using an arbitrary cutoff.
+
+## Implemented layers
 
 ### Bronze
 
-- Streaming Sleep-EDF extraction from official PhysioNet manifests.
-- Official SHA-256 verification before publication.
-- Recoverable downloads, verified-object recovery, retry policies, pipeline
-  locks, heartbeats, and per-file attempt history.
-- Safe interruption cleanup for `KeyboardInterrupt` and other
-  `BaseException` subclasses.
-- Bronze reconciliation between MinIO and `raw.file_registry`.
-- Structured UTC logging and live download progress.
+- official PhysioNet manifest parsing and source selection;
+- streaming downloads with retry and interruption cleanup;
+- official SHA-256 verification before publication;
+- verified-object recovery and idempotent registration;
+- advisory locks, heartbeats, per-file attempt history, and reconciliation.
 
-### Silver recordings
+### Silver
 
-- PSG metadata parsing and Hypnogram interval parsing.
-- Source-preserving sleep-stage labels and normalized stage values.
-- 30-second epoch expansion.
-- Channel metadata and chunked signal extraction.
-- Explicit PyArrow schemas and Zstandard-compressed Parquet.
-- Version-aware identity using `source_pair_id`, `input_fingerprint`,
-  `schema_version`, `transform_version`, and `config_id`.
-- Atomic writes, payload checksums, `_SUCCESS.json`, reconciliation,
-  partial-output recovery, and idempotent reruns.
-- Batch discovery, batch execution, progress reporting, pipeline tracking, and
-  durable quality-check history.
+- PSG metadata and channel extraction;
+- Hypnogram interval parsing and 30-second epoch expansion;
+- source-preserving sleep-stage labels and normalized values;
+- optional chunked signal extraction;
+- explicit PyArrow schemas and Zstandard-compressed Parquet;
+- version-aware identity (`source_pair_id`, `input_fingerprint`, `config_id`,
+  schema version, transform version);
+- atomic publication with payload checksums and `_SUCCESS.json`;
+- durable quality history and active quarantine routing for quality-gate errors;
+- metadata-only processing mode for analytical cohort expansion.
 
-### Silver subject metadata
-
-- Normalized `subjects.parquet` and `recording_contexts.parquet` datasets.
-- Deterministic `subject_key` values.
-- Collection-specific sex-code normalization.
-- Recording-level night, treatment, and lights-off context.
-- Source-object lineage and idempotent publication.
-
-### PostgreSQL
-
-Implemented schemas:
+### PostgreSQL staging
 
 ```text
-raw
-staging
-warehouse
-mart
-ops
-quality
-governance
+staging.silver_subjects                 100
+staging.silver_recording_contexts       197
+staging.silver_recordings                18
+staging.silver_channels                 110
+staging.silver_sleep_stage_intervals   3,263
+staging.silver_sleep_stage_epochs     35,710
 ```
 
-Implemented staging tables:
+The recording staging loader processes current compatible Silver publications
+only. On the cohort expansion run it wrote 13 new publications and skipped the
+5 already loaded ones. The immediate rerun skipped all 18 and wrote zero rows.
+
+### Warehouse Core
 
 ```text
-staging.silver_recordings
-staging.silver_channels
-staging.silver_sleep_stage_intervals
-staging.silver_sleep_stage_epochs
-staging.silver_subjects
-staging.silver_recording_contexts
+warehouse.dim_subject          100
+warehouse.dim_recording         18
+warehouse.dim_channel          110
+warehouse.dim_sleep_stage        8
+warehouse.fact_sleep_epoch  35,710
 ```
 
-Both production staging paths are implemented. Current PostgreSQL staging
-contains 100 subjects, 197 recording contexts, 5 recordings, 33 channels,
-834 source annotation intervals, and 12,224 emitted sleep-stage epochs.
-High-volume signal samples remain in MinIO. The dbt project builds and validates
-five Warehouse Core tables from the selected staging publications.
+The Warehouse uses deterministic surrogate keys, explicit model contracts,
+relationship tests, grain tests, reconciliation, and fail-closed current-version
+selection.
 
-## Current production coverage
+### Analytics Marts
 
 ```text
-Sleep Cassette recordings: 4
-Sleep Telemetry recordings: 1
-Total Silver signal rows: 116,242,840
-Subjects: 100
-Recording contexts: 197
+mart.mart_recording_sleep_summary       18 rows
+mart.mart_recording_stage_distribution 126 rows
+mart.mart_dataset_coverage                6 rows
 ```
 
-The five production recordings are:
+The stage-distribution mart always emits seven analytical stages per recording,
+including zero-duration stages. More detail is in
+[`docs/analytics_marts.md`](docs/analytics_marts.md).
+
+## Validation
+
+Current verified regression status:
 
 ```text
-SC4001E
-SC4002E
-SC4011E
-SC4012E
-ST7011J
+Core smoke tests:         15/15
+Reliability smoke tests:  17/17
+Silver smoke tests:       26/26
+Python smoke total:       58/58
+dbt project:              14 models / 249 data tests
+Full dbt build:           257/257 PASS, 0 WARN, 0 ERROR
 ```
 
-## Data profiles
+The Phase 7 validation also confirmed:
 
-Sample mode:
-
-```env
-DATA_PROFILE=sample
-SLEEP_EDF_MAX_RECORDINGS=4
-SLEEP_EDF_INCLUDE_CASSETTE=true
-SLEEP_EDF_INCLUDE_TELEMETRY=true
-SLEEP_EDF_INCLUDE_METADATA=true
+```text
+recording summary rows:        18
+stage distribution rows:      126
+coverage rows:                   6
+ST7091J first annotated epoch:   1
+ST7161J first annotated epoch:  14
 ```
 
-Full-source mode:
-
-```env
-DATA_PROFILE=full
-```
-
-`SLEEP_EDF_MAX_RECORDINGS=0` removes the sample recording limit.
+Two consecutive full dbt rebuilds produced the same recording-summary content
+checksum, providing a direct regression check for deterministic rebuild behavior.
 
 ## Local setup
 
@@ -172,8 +198,8 @@ pip install -r requirements.txt
 make bootstrap
 ```
 
-The package supports Python 3.11 or newer. The current development environment
-uses Python 3.13.5.
+The project supports Python 3.11+. The current local development environment uses
+Python 3.13.5 and PostgreSQL 18.4 on host port 5433.
 
 ## Common commands
 
@@ -192,7 +218,7 @@ make psql
 ./scripts/run_dbt.sh build
 ```
 
-Production-oriented Silver commands:
+Main data-flow commands:
 
 ```bash
 PYTHONPATH=src python scripts/plan_silver_batch.py
@@ -202,60 +228,35 @@ PYTHONPATH=src python scripts/load_subject_metadata_staging.py
 PYTHONPATH=src python scripts/load_recording_staging.py
 ```
 
-## Validation status
-
-```text
-Core smoke tests:         15/15
-Reliability smoke tests:  17/17
-Silver smoke tests:       24/24
-Python smoke total:        56/56
-Warehouse dbt build:      201/201
-```
-
-## Completed milestones
+## Milestones
 
 ```text
 v0.1.0-bronze
 v0.2.0-silver
+v0.3.0-warehouse
 ```
 
-## Current Phase 6 scope
-
-The initial Warehouse Core is implemented:
-
-```text
-warehouse.dim_subject          100 rows
-warehouse.dim_recording          5 rows
-warehouse.dim_channel           33 rows
-warehouse.dim_sleep_stage        8 rows
-warehouse.fact_sleep_epoch  12,224 rows
-```
-
-The dbt layer includes staging source tests, fail-closed metadata/recording
-selection, deterministic Warehouse surrogate keys, model contracts,
-relationship tests, and source-to-Warehouse reconciliation. Warehouse governance
-is also registered through five active v1 YAML contracts and column-level
-classification for all 81 Warehouse columns.
-
-`warehouse.fact_signal_quality`, device-event models, marts, and Gold outputs
-remain future scope and require explicit upstream datasets and grains.
+Phase 7 is implemented on the current development branch and has not yet been
+published as a release tag.
 
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md)
-- [`docs/data_sources.md`](docs/data_sources.md)
 - [`docs/data_flow.md`](docs/data_flow.md)
-- [`docs/storage_layout.md`](docs/storage_layout.md)
-- [`docs/database_schemas.md`](docs/database_schemas.md)
+- [`docs/analytics_marts.md`](docs/analytics_marts.md)
 - [`docs/data_model.md`](docs/data_model.md)
+- [`docs/database_schemas.md`](docs/database_schemas.md)
 - [`docs/data_contracts.md`](docs/data_contracts.md)
 - [`docs/quality_rules.md`](docs/quality_rules.md)
 - [`docs/access_model.md`](docs/access_model.md)
+- [`docs/data_sources.md`](docs/data_sources.md)
+- [`docs/storage_layout.md`](docs/storage_layout.md)
 - [`docs/local_setup.md`](docs/local_setup.md)
 - [`docs/extract_runbook.md`](docs/extract_runbook.md)
 - [`docs/edf_inspection.md`](docs/edf_inspection.md)
 - [`docs/decisions/001_silver_identity_and_lineage.md`](docs/decisions/001_silver_identity_and_lineage.md)
 - [`docs/decisions/002_warehouse_grain_and_version_selection.md`](docs/decisions/002_warehouse_grain_and_version_selection.md)
+- [`docs/decisions/003_warehouse_physical_model_and_build_semantics.md`](docs/decisions/003_warehouse_physical_model_and_build_semantics.md)
 
-Real EDF files, generated Parquet objects, credentials, and runtime logs are not
+Real EDF/XLS files, generated Parquet, credentials, and runtime logs are not
 committed to Git.

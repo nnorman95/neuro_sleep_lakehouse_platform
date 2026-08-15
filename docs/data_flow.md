@@ -1,15 +1,15 @@
 # Data Flow
 
-This document describes the implemented Bronze, Silver, staging, and Phase 6
-Warehouse analytical flow.
+This document follows one piece of data from PhysioNet to the Phase 7 analytical
+marts. It focuses on what is implemented today and where the project deliberately
+stops.
 
 ## 1. Extract and Bronze
 
 ```text
 Sleep-EDF / PhysioNet
   -> RECORDS + SHA256SUMS.txt
-  -> manifest parsing
-  -> sample/full source selection
+  -> source selection
   -> streaming HTTP download
   -> official SHA-256 verification
   -> MinIO Bronze
@@ -18,35 +18,31 @@ Sleep-EDF / PhysioNet
   -> ops.file_attempt
 ```
 
-Existing verified objects are skipped or recovered instead of being downloaded
-blindly. Bronze reconciliation compares MinIO object state with PostgreSQL
-registry state.
+Existing verified objects are recovered or skipped rather than downloaded again.
+On failure or user interruption, the run is finalized, the heartbeat and advisory
+lock are released, resources are closed, and unfinished `.part` files are removed.
 
-On failure or user interruption, the pipeline finalizes run and attempt status,
-stops the heartbeat, releases the advisory lock, closes network/storage
-resources, and removes unfinished `.part` files.
-
-## 2. Bronze to Silver Recording Flow
+## 2. Bronze to Silver recordings
 
 ```text
 Bronze PSG EDF + Hypnogram EDF
   -> complete-pair discovery by recording_key
-  -> verified source-lineage resolution
+  -> source-lineage resolution
   -> edfio parsing
-  -> recording and channel metadata
+  -> recording + channel metadata
   -> source annotation intervals
   -> 30-second epoch expansion
-  -> chunked signal extraction
+  -> optional chunked signal extraction
   -> Silver quality gate
-  -> PyArrow tables
+  -> explicit PyArrow tables
   -> Parquet + ZSTD
-  -> verified MinIO upload
+  -> verified upload
   -> _SUCCESS.json
   -> reconciliation
   -> durable quality history
 ```
 
-The recording output is versioned by:
+A recording publication is versioned by:
 
 ```text
 schema_version
@@ -56,34 +52,48 @@ input_fingerprint
 config_id
 ```
 
-A completed matching output is skipped on rerun. An incomplete prefix without a
-valid success manifest is cleaned and rebuilt.
+A matching completed output is skipped on rerun. An incomplete output under the
+same versioned prefix is removed and rebuilt.
 
-## 3. Bronze to Silver Subject-Metadata Flow
+### Quality failure path
+
+```text
+Silver quality error
+  -> quality.quality_check_results
+  -> one active quality.quarantine_records incident
+  -> Silver publication blocked
+```
+
+Repeated failures of the same concrete representation refresh the active
+incident. A later successful written or skipped run resolves it. Runtime/network/
+database/storage failures remain operational failures and do not create a fake
+data-quality incident.
+
+## 3. Bronze to Silver subject metadata
 
 ```text
 SC-subjects.xls + ST-subjects.xls
   -> Bronze registry lookup
-  -> object download and checksum verification
+  -> object download + checksum verification
   -> collection-specific parsing
   -> demographic normalization
-  -> deterministic subject_key generation
-  -> recording_key and subject_key reconciliation
+  -> deterministic subject_key
+  -> recording_key / subject_key reconciliation
   -> subjects.parquet
   -> recording_contexts.parquet
   -> _SUCCESS.json
 ```
 
-The production publication contains:
+Current publication:
 
 ```text
 100 subjects
 197 recording contexts
 ```
 
-A completed matching metadata publication is skipped on rerun.
+An unchanged publication is skipped on rerun.
 
-## 4. Sleep-Stage Semantics
+## 4. Sleep-stage semantics
 
 Silver preserves source Stage 3 and Stage 4 separately:
 
@@ -92,141 +102,186 @@ Sleep stage 3 -> N3
 Sleep stage 4 -> N4
 ```
 
-A later analytical layer may map both values to analytical `N3`, but the
-source-preserving values remain available.
+The Warehouse reference dimension later maps both to analytical `N3` while still
+keeping the source-preserving code available for lineage.
 
-`UNKNOWN` and `MOVEMENT` remain explicit and must not silently become ordinary
-sleep stages.
+`UNKNOWN` and `MOVEMENT` stay explicit throughout the relational path.
 
-## 5. Cassette Coverage Semantics
+## 5. Timeline and coverage behavior
 
-For the inspected Sleep Cassette recordings, Hypnogram coverage can extend past
-the PSG end.
+### Sleep Cassette
 
-Silver:
+Source annotation intervals can extend beyond the PSG end. Silver keeps the
+original interval and overhang metrics, but only real 30-second epochs inside the
+PSG timeline are emitted.
 
-- preserves the source interval and overhang metric;
-- emits only real 30-second epochs inside the PSG timeline;
-- records out-of-range epoch counts;
-- prevents out-of-range annotation rows from being joined to signal samples.
+### Sleep Telemetry
 
-## 6. Telemetry Coverage Semantics
+Telemetry can start or end with PSG time that has no source annotation. This is
+a warning, not a reason to fabricate epochs.
 
-Sleep Telemetry may have:
-
-- a recording duration not aligned exactly to 30 seconds;
-- a PSG tail without source annotation coverage.
-
-These are warnings when the real annotation-derived epochs remain within PSG
-coverage. A real epoch extending past the PSG boundary is an error.
-
-The complete PSG signal remains in Silver even when the final signal tail has no
-annotation-derived epoch.
-
-## 7. Current PostgreSQL Staging Flow
-
-Physical staging DDL currently exists for:
+Examples preserved through Warehouse and marts:
 
 ```text
-staging.silver_recordings
-staging.silver_channels
-staging.silver_sleep_stage_intervals
-staging.silver_sleep_stage_epochs
-staging.silver_subjects
-staging.silver_recording_contexts
+ST7091J first annotated epoch = 1  (30 seconds)
+ST7161J first annotated epoch = 14 (420 seconds)
 ```
 
-Migration `025` finalized version-aware recording identity and lineage.
-Migration `036` added explicit `dataset_version`, `collection`, and
-`recording_key` columns for canonical logical recording reconciliation.
+An internal gap in the emitted epoch sequence remains an error.
 
-The subject-metadata staging path is implemented:
+## 6. Analytical cohort expansion
+
+The first full-signal subset contains five recordings:
+
+```text
+SC4001E
+SC4002E
+SC4011E
+SC4012E
+ST7011J
+```
+
+For Phase 7, 13 more recordings were added to the relational analytical cohort.
+They were processed with signal extraction disabled because the marts use
+metadata and sleep-stage epochs, not raw samples.
+
+The resulting analytical cohort is:
+
+```text
+18 recordings
+9 represented subjects
+110 channels
+3,263 annotation intervals
+35,710 emitted epochs
+```
+
+The original five-recording full-signal subset still contains 116,242,840 signal
+rows in MinIO.
+
+## 7. Silver to PostgreSQL staging
+
+Subject metadata path:
 
 ```text
 subjects.parquet + recording_contexts.parquet + _SUCCESS.json
-  -> publication identity validation
-  -> object-size and SHA-256 verification
-  -> exact Parquet-schema validation
-  -> one PostgreSQL transaction
-  -> staging.silver_subjects: 100 rows
-  -> staging.silver_recording_contexts: 197 rows
-  -> ops.pipeline_run
-```
-
-An unchanged rerun is tracked as `skipped` and writes zero rows.
-
-The recording staging path is also implemented:
-
-```text
-5 current Silver recording publications
-  -> exclude legacy/incompatible publication versions
-  -> validate _SUCCESS.json and canonical logical identity
-  -> verify object sizes + SHA-256
-  -> exact Parquet-schema and row-count validation
+  -> publication/object/checksum/schema validation
   -> PostgreSQL transaction
-  -> staging.silver_recordings: 5 rows
-  -> staging.silver_channels: 33 rows
-  -> staging.silver_sleep_stage_intervals: 834 rows
-  -> staging.silver_sleep_stage_epochs: 12,224 rows
-  -> ops.pipeline_run
+  -> staging.silver_subjects: 100
+  -> staging.silver_recording_contexts: 197
 ```
 
-Signal Parquet objects are not downloaded by the staging loader. An unchanged
-recording rerun is tracked as `skipped` and writes zero rows.
-
-## 8. Implemented Phase 6 Analytical Flow
+Recording path:
 
 ```text
-MinIO Silver metadata and epochs
-  -> manifest validation
-  -> tracked staging-load pipeline run
-  -> idempotent PostgreSQL staging load
-  -> dbt staging source tests
-  -> fail-closed metadata publication / recording representation selection
-  -> deterministic Warehouse dimensions and sleep-epoch fact
-  -> dbt model contracts + grain + relationship + reconciliation tests
-  -> marts and Gold only after explicit downstream grains are defined
+18 current compatible Silver recording publications
+  -> reject legacy/incompatible versions
+  -> validate _SUCCESS.json + logical identity
+  -> verify object sizes + SHA-256
+  -> verify exact Parquet schemas + row counts
+  -> PostgreSQL transaction
+  -> staging.silver_recordings: 18
+  -> staging.silver_channels: 110
+  -> staging.silver_sleep_stage_intervals: 3,263
+  -> staging.silver_sleep_stage_epochs: 35,710
 ```
 
-Both required production staging paths are implemented:
+Signal Parquet is never downloaded by the staging loader.
+
+Idempotency was checked directly during the expansion:
 
 ```text
-staging.silver_subjects
-staging.silver_recording_contexts
-staging.silver_recordings
-staging.silver_channels
-staging.silver_sleep_stage_intervals
-staging.silver_sleep_stage_epochs
+first run:  13 publications written / 5 skipped / 26,005 rows written
+rerun:       0 publications written / 18 skipped / 0 rows written
 ```
 
-The Warehouse Core implementation and its transformation tests are complete for
-the current production baseline.
-
-Current Warehouse Core:
+## 8. Staging to Warehouse
 
 ```text
-warehouse.dim_subject          100 rows
-warehouse.dim_recording          5 rows
-warehouse.dim_channel           33 rows
-warehouse.dim_sleep_stage        8 rows
-warehouse.fact_sleep_epoch  12,224 rows
+PostgreSQL staging
+  -> dbt source tests
+  -> fail-closed metadata publication selection
+  -> fail-closed recording representation selection
+  -> deterministic Warehouse surrogate keys
+  -> dimensions + sleep-epoch fact
+  -> grain / relationship / lineage / reconciliation tests
 ```
 
-The full dbt build currently passes 201/201 models/tests combined. High-volume
-signal samples never enter this relational path.
+Current Warehouse:
 
-## 9. Scale Boundary
+```text
+warehouse.dim_subject          100
+warehouse.dim_recording         18
+warehouse.dim_channel          110
+warehouse.dim_sleep_stage        8
+warehouse.fact_sleep_epoch  35,710
+```
 
-Low-volume metadata and epochs may be loaded into PostgreSQL. The
-116,242,840 production signal rows remain in MinIO/Parquet.
+The fact grain is one emitted 30-second epoch per selected recording. Epochs are
+not multiplied by channel.
 
-Future signal features may be written to Gold and loaded selectively into
-PostgreSQL only when their grain and analytical use are defined.
+## 9. Warehouse to Phase 7 marts
 
-## 10. Lineage Boundary
+```text
+warehouse.fact_sleep_epoch
+        |
+        v
+int_recording_stage_metrics
+        |
+        +------------------------------+
+        |                              |
+        v                              v
+mart_recording_stage_distribution   int_recording_sleep_metrics
+                                       |
+                                       +--> mart_recording_sleep_summary
+                                       |
+                                       +--> mart_dataset_coverage
+```
 
-Warehouse surrogate keys do not replace lineage. Warehouse rows must retain or
-be traceable to:
+Current physical row counts:
+
+```text
+mart.mart_recording_sleep_summary       18
+mart.mart_recording_stage_distribution 126
+mart.mart_dataset_coverage                6
+```
+
+The stage mart emits seven analytical stages for every recording, including
+zero-duration stages. The summary mart reports sleep architecture and structural
+coverage. The coverage mart reports what material exists by source, collection,
+night, and treatment context.
+
+The formulas and grains are documented in
+[`analytics_marts.md`](analytics_marts.md).
+
+## 10. Validation flow
+
+The current full dbt project contains 14 models and 249 data tests. A full build
+passes all 257 executed model/test nodes.
+
+Phase 7 tests cover:
+
+- complete recording x analytical-stage grid;
+- one row per documented mart grain;
+- duration and percentage reconciliation;
+- recording-summary coverage boundaries;
+- dataset-level aggregation reconciliation;
+- Warehouse relationships and source reconciliation.
+
+Two consecutive full rebuilds produced the same recording-summary content
+checksum during Phase 7 validation.
+
+## 11. Scale boundary
+
+Low-volume metadata, epochs, dimensions, and marts belong in PostgreSQL. The
+116,242,840 current signal rows remain in MinIO/Parquet.
+
+The next high-volume step should compute signal features close to Parquet and
+only publish compact, versioned outputs downstream.
+
+## 12. Lineage boundary
+
+Warehouse surrogate keys are analytical join keys, not replacements for lineage.
+Rows remain traceable through values such as:
 
 ```text
 subject_key
@@ -238,6 +293,6 @@ schema_version
 transform_version
 config_id
 source file IDs
-Silver bucket and output prefix
+Silver bucket + output prefix
 pipeline run IDs
 ```

@@ -12,6 +12,7 @@ contracts/raw_file_registry.yml
 contracts/ops_pipeline_run.yml
 contracts/ops_file_attempt.yml
 contracts/quality_quarantine_records.yml
+contracts/quality_quarantine_records_v2.yml
 contracts/quality_check_results.yml
 contracts/governance_source_system_registry.yml
 contracts/staging_silver_recordings.yml
@@ -58,6 +59,17 @@ physical contract did not receive the same identity correction.
 
 Historical contracts must not be deleted merely because a newer version is
 active. They document schema evolution and match the governance registry.
+
+Quality quarantine contracts follow the same lifecycle:
+
+```text
+quality_quarantine_records.yml
+    historical v1 contract; registry status = deprecated
+
+quality_quarantine_records_v2.yml
+    active v2 contract; documents the active-incident identity used by
+    Silver quality-gate quarantine routing
+```
 
 ## 3. Silver Parquet Contracts
 
@@ -130,7 +142,7 @@ Every important relational contract should state:
 - access policy;
 - compatibility notes.
 
-## 6. Phase 6 Contract Work
+## 6. Warehouse and Mart Contract Work
 
 The subject-aware staging contracts are implemented and registered as active
 v1 contracts:
@@ -155,6 +167,17 @@ All 81 physical Warehouse columns have matching governance classifications.
 The dbt Warehouse models separately use enforced model contracts and schema/data
 tests; the YAML registry contracts remain the version-controlled governance
 record.
+
+Phase 7 marts also use enforced dbt model contracts in:
+
+```text
+dbt/models/marts/marts.yml
+```
+
+Those contracts cover the physical mart columns and types used during dbt builds.
+Separate registry-backed mart governance contracts/classifications are not added
+yet; they belong with the later access/BI rollout before broader consumption is
+enabled.
 
 Do not create contracts for `fact_signal_quality` or device-event models until
 trusted upstream datasets and exact grains exist.
@@ -189,9 +212,11 @@ Implemented:
 - five active Warehouse Core v1 governance contracts;
 - Warehouse column classification for all 81 physical columns;
 - enforced dbt model contracts plus Warehouse relationship/reconciliation tests;
+- enforced dbt contracts for the three Phase 7 marts;
 - explicit Silver Parquet schemas.
 
 Not implemented yet:
 
 - contracts for deferred signal-quality/device-event facts;
-- mart and Gold contracts.
+- registry-backed mart governance contracts/classifications for broader access;
+- Gold contracts.

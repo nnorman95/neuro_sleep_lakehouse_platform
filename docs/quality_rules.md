@@ -322,7 +322,7 @@ Errors include:
 - conflicting subject demographics;
 - duplicate recording context.
 
-## 13. Phase 6 Staging and Warehouse Quality
+## 13. Staging, Warehouse, and Mart Quality
 
 Implemented subject-metadata staging checks:
 
@@ -366,7 +366,18 @@ Implemented Warehouse checks:
 - selected-stage coverage and controlled sleep-stage mapping;
 - per-recording channel and epoch count reconciliation.
 
-The current full dbt build passes 201/201 models/tests combined.
+Implemented Phase 7 mart checks:
+
+- every current recording has exactly one row for each of the seven analytical stages;
+- recording + analytical-stage grain is unique;
+- recording-level annotated/scored/sleep/wake durations reconcile;
+- stage percentages reconcile to their documented denominators;
+- recording-summary coverage values stay within valid structural boundaries;
+- dataset-coverage grain is unique;
+- dataset-level recording counts and durations reconcile back to Warehouse metrics;
+- no arbitrary scientific `usable` threshold is introduced.
+
+The current full dbt build passes 257/257 executed model/test nodes: 14 models are defined in the project and 249 data tests are registered.
 
 ## 14. Future Quality Scope
 
@@ -379,7 +390,6 @@ Not implemented yet:
 - Great Expectations integration;
 - intentionally broken-data fixture suite;
 - Gold feature-quality rules;
-- mart-level aggregate checks.
 
 These remain future scope and must not be represented as current datasets.
 
@@ -400,7 +410,7 @@ Core:          15/15
 Reliability:   17/17
 Silver:        26/26
 Python total:  58/58
-Warehouse dbt: 201/201
+Full dbt:      257/257
 ```
 
 ## 16. What Must Not Happen
@@ -433,13 +443,14 @@ Recording metadata staging schema and loader validation
 Warehouse Core schema and dimensional-grain checks
 Warehouse fail-closed selection gates
 Warehouse transformation relationship and reconciliation tests
-Warehouse dbt contracts and full-rebuild regression: 201/201
+Warehouse + mart dbt contracts and regression: 257/257
 Interruption and failure cleanup tests
 ```
 
 Next:
 
 ```text
-mart/Gold quality rules only when downstream grains are defined
+Gold feature-quality rules when versioned feature datasets exist
 signal-quality rules only after a trusted analytical signal-quality dataset exists
+device-event and streaming quality rules when those sources are introduced
 ```
