@@ -1,8 +1,9 @@
 # Data Flow
 
 This document follows data from PhysioNet through the relational analytics
-path and the Phase 8 Spark/Gold signal-feature path. It focuses on what is
-implemented today and where the project deliberately stops.
+path, the Phase 8 Spark/Gold signal-feature path, and the Phase 9 feature
+integration path. It focuses on what is implemented today and where the project
+deliberately stops.
 
 ## 1. Extract and Bronze
 
@@ -356,6 +357,47 @@ Gold data object path + size + ETag
 Spark version
 ```
 
-Phase 9 can therefore join compact signal features to Warehouse labels and context
-without losing the identity of the concrete Silver representation that produced
-them.
+Phase 9 joins compact signal features to Warehouse labels and context without
+losing the identity of the concrete Silver representation that produced them.
+
+## 14. Gold features to integrated Gold
+
+Phase 9 starts from the compact Phase 8 output:
+
+```text
+Gold signal_features
+  5 Parquet files
+  83,909 rows
+        |
+        +--> Warehouse recording/channel/subject context
+        |
+        +--> Warehouse sleep-epoch + sleep-stage context
+        |
+        v
+Spark feature integration
+        |
+        v
+Gold integrated_signal_features
+  5 Parquet files
+  83,909 rows
+```
+
+Recording/channel context is required for every feature row. Sleep-stage context
+is optional because real signal windows can exist outside source annotation
+coverage.
+
+Current reconciliation:
+
+```text
+all integrated rows:       83,909
+Warehouse context rows:    83,909
+sleep-stage labeled rows:  83,384
+unlabeled rows:                525
+```
+
+The 525 unlabeled rows are `ST7011J` epochs `1092..1196` across five channels.
+
+The integrated publication records validated source-Gold lineage and a
+deterministic Warehouse-context SHA-256. This separates reusable signal
+computation from relational context integration and avoids re-reading
+sample-level Silver data during Phase 9.

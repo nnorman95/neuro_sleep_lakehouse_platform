@@ -128,7 +128,30 @@ A completed valid representation is immutable and skipped on rerun.
 See [`spark_signal_features.md`](spark_signal_features.md) for the full field
 groups and publication layout.
 
-## 5. Contract Lifecycle
+## 5. Integrated Gold Feature Contract
+
+Phase 9 adds `integrated_signal_features`, enforced in Spark/Python code and its
+Gold `_SUCCESS.json` manifest.
+
+```text
+schema_version:       1.0.0
+feature_version:      1.0.0
+integration_version:  1.0.0
+grain:                recording_id + channel_id + epoch_number
+```
+
+Recording/channel Warehouse context is required on every row. Sleep-stage fields
+are nullable only for real signal windows without a corresponding emitted
+Warehouse epoch.
+
+The immutable publication identity includes `input_recording_id` and
+`warehouse_context_sha256`. The manifest additionally records validated
+source-Gold object lineage, Warehouse context counts, integrated row counts,
+label coverage, data-object size/ETag, and Spark version.
+
+See [`feature_integration.md`](feature_integration.md).
+
+## 6. Contract Lifecycle
 
 Use these statuses:
 
@@ -149,7 +172,7 @@ A contract change should follow this sequence:
 7. add focused smoke tests;
 8. run the full regression suite.
 
-## 6. Contract Requirements
+## 7. Contract Requirements
 
 Every important relational contract should state:
 
@@ -167,7 +190,7 @@ Every important relational contract should state:
 - access policy;
 - compatibility notes.
 
-## 7. Warehouse and Mart Contract Work
+## 8. Warehouse and Mart Contract Work
 
 The subject-aware staging contracts are implemented and registered as active
 v1 contracts:
@@ -207,7 +230,7 @@ enabled.
 Do not create contracts for `fact_signal_quality` or device-event models until
 trusted upstream datasets and exact grains exist.
 
-## 8. Privacy Boundary
+## 9. Privacy Boundary
 
 Contracts for subject-aware tables must mark the following as restricted or
 sensitive as appropriate:
@@ -225,7 +248,7 @@ source object lineage
 
 `subject_key` is pseudonymous, not guaranteed anonymous.
 
-## 9. Current Status
+## 10. Current Status
 
 Implemented:
 
@@ -239,7 +262,8 @@ Implemented:
 - enforced dbt model contracts plus Warehouse relationship/reconciliation tests;
 - enforced dbt contracts for the three Phase 7 marts;
 - explicit Silver Parquet schemas;
-- code- and manifest-enforced Gold signal-feature v1 contract.
+- code- and manifest-enforced Gold signal-feature v1 contract;
+- code- and manifest-enforced integrated Gold feature v1 contract.
 
 Not implemented yet:
 
