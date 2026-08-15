@@ -525,10 +525,14 @@ def check_epochs(
             ),
         )
 
+    first_epoch_number = epoch_numbers[0]
     expected_epoch_numbers = list(
-        range(len(bundle.epochs))
+        range(
+            first_epoch_number,
+            first_epoch_number
+            + len(epoch_numbers),
+        )
     )
-
     if epoch_numbers != (
         expected_epoch_numbers
     ):
@@ -538,7 +542,7 @@ def check_epochs(
             severity="error",
             message=(
                 "epochs must be ordered and "
-                "contiguous from zero"
+                "contiguous on the PSG timeline"
             ),
         )
 
