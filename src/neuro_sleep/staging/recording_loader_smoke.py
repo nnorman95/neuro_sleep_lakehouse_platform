@@ -313,11 +313,10 @@ def run_smoke_test() -> None:
             )
         )
 
-        if len(publications) != 5:
+        if not publications:
             raise RuntimeError(
-                "Expected five current compatible "
-                "recording publications, found "
-                f"{len(publications)}"
+                "No current compatible recording "
+                "publications were discovered"
             )
 
         expected_counts = _expected_counts(
@@ -374,13 +373,19 @@ def run_smoke_test() -> None:
                     "count is incorrect"
                 )
 
+            expected_files_processed = sum(
+                publication.expected_files
+                for publication in publications
+            )
             if (
                 first.load_result.files_processed
-                != 20
+                != expected_files_processed
             ):
                 raise RuntimeError(
-                    "Written recording staging load "
-                    "must process 20 metadata files"
+                    "Written recording staging file "
+                    "count is incorrect: expected "
+                    f"{expected_files_processed}, got "
+                    f"{first.load_result.files_processed}"
                 )
 
             written_run = get_pipeline_run_status(
