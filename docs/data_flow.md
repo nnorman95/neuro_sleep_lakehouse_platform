@@ -1,8 +1,8 @@
 # Data Flow
 
-This document follows one piece of data from PhysioNet to the Phase 7 analytical
-marts. It focuses on what is implemented today and where the project deliberately
-stops.
+This document follows data from PhysioNet through the relational analytics
+path and the Phase 8 Spark/Gold signal-feature path. It focuses on what is
+implemented today and where the project deliberately stops.
 
 ## 1. Extract and Bronze
 
@@ -253,46 +253,109 @@ night, and treatment context.
 The formulas and grains are documented in
 [`analytics_marts.md`](analytics_marts.md).
 
-## 10. Validation flow
+## 10. Silver signals to Gold features
 
-The current full dbt project contains 14 models and 249 data tests. A full build
-passes all 257 executed model/test nodes.
-
-Phase 7 tests cover:
-
-- complete recording x analytical-stage grid;
-- one row per documented mart grain;
-- duration and percentage reconciliation;
-- recording-summary coverage boundaries;
-- dataset-level aggregation reconciliation;
-- Warehouse relationships and source reconciliation.
-
-Two consecutive full rebuilds produced the same recording-summary content
-checksum during Phase 7 validation.
-
-## 11. Scale boundary
-
-Low-volume metadata, epochs, dimensions, and marts belong in PostgreSQL. The
-116,242,840 current signal rows remain in MinIO/Parquet.
-
-The next high-volume step should compute signal features close to Parquet and
-only publish compact, versioned outputs downstream.
-
-## 12. Lineage boundary
-
-Warehouse surrogate keys are analytical join keys, not replacements for lineage.
-Rows remain traceable through values such as:
+The signal path starts from the same trusted logical selection used by the
+Warehouse rather than from a wildcard over the Silver bucket.
 
 ```text
-subject_key
+warehouse.dim_recording current selection
+  -> silver_recording_id + silver_output_prefix
+  -> exact signal objects from Silver _SUCCESS.json
+  -> Spark S3A
+  -> recording/channel/30-second aggregation
+  -> sample coverage + descriptive statistics
+  -> pre-publication validation
+  -> Gold Parquet
+  -> Spark read-back validation
+  -> Gold _SUCCESS.json
+```
+
+Current input:
+
+```text
+5 selected recordings
+1,416 Silver Parquet files
+116,242,840 signal rows
+~0.698 GiB selected Silver signal data
+```
+
+Current Gold output:
+
+```text
+5 Parquet data files
+5 success manifests
+83,909 feature rows
+5 partial-window rows
+4.328 MiB Parquet
+```
+
+The output grain is one recording + channel + 30-second signal window. Sleep-stage
+labels are deliberately not joined during Phase 8.
+
+Completed exact Gold outputs are skipped before signal recomputation. An
+incomplete exact prefix without a success manifest can be recovered automatically.
+A completed but invalid prefix fails closed.
+
+## 11. Validation flow
+
+The relational dbt project contains 14 models and 249 data tests. The Phase 7
+full build baseline passes all 257 executed model/test nodes.
+
+Phase 8 adds separate high-volume checks:
+
+- Spark runtime and Hadoop/S3A compatibility;
+- exact current Silver signal selection;
+- complete Spark S3A row reconciliation;
+- synthetic full/partial feature math;
+- sample count, sample index, timing, coverage, and finite-feature checks;
+- Gold manifest and object validation;
+- Gold Spark read-back validation;
+- idempotent full rerun;
+- partial-output recovery and completed-prefix fail-closed smoke tests.
+
+The canonical full Phase 8 regression entrypoint is:
+
+```bash
+make phase8-check
+```
+
+## 12. Scale boundary
+
+Low-volume metadata, epochs, dimensions, and relational marts belong in
+PostgreSQL.
+
+The 116,242,840 selected signal rows remain Silver Parquet in MinIO. Spark
+converts them to 83,909 reusable window-level Gold feature rows without loading
+sample-level signals into PostgreSQL.
+
+Spark currently runs with `local[*]`. A multi-node cluster or custom partition
+tuning is deferred until scale or measurements justify the additional operational
+complexity.
+
+## 13. Lineage boundary
+
+Warehouse surrogate keys are analytical join keys, not replacements for lineage.
+The relational path remains traceable through subject, recording, source,
+version, and Silver publication identity.
+
+The Gold signal-feature path additionally records:
+
+```text
+source_system
+dataset_version
+collection
 recording_key
 recording_id
-source_pair_id
-input_fingerprint
-schema_version
-transform_version
-config_id
-source file IDs
-Silver bucket + output prefix
-pipeline run IDs
+channel_id
+feature_version
+Gold schema_version
+Silver bucket + output_prefix
+Silver signal file/row/size counts
+Gold data object path + size + ETag
+Spark version
 ```
+
+Phase 9 can therefore join compact signal features to Warehouse labels and context
+without losing the identity of the concrete Silver representation that produced
+them.

@@ -103,7 +103,32 @@ recording_contexts
 Silver publication additionally validates object size, SHA-256 metadata,
 manifest content, row counts, and expected object inventory.
 
-## 4. Contract Lifecycle
+## 4. Gold Signal-Feature Contract
+
+The Phase 8 Gold feature dataset is object-storage data, so its contract is
+enforced in Spark/Python code and the Gold `_SUCCESS.json` manifest rather than
+the PostgreSQL governance registry.
+
+Current versions:
+
+```text
+Gold schema_version:   1.0.0
+feature_version:       1.0.0
+window:                30 seconds
+grain:                 recording_id + channel_id + epoch_number
+```
+
+The feature frame requires identity, channel context, window boundaries, sample
+coverage, descriptive statistics, and feature version fields. Publication also
+validates exact Silver lineage, expected row counts, partial-window counts,
+physical object inventory, file size, and ETag.
+
+A completed valid representation is immutable and skipped on rerun.
+
+See [`spark_signal_features.md`](spark_signal_features.md) for the full field
+groups and publication layout.
+
+## 5. Contract Lifecycle
 
 Use these statuses:
 
@@ -124,7 +149,7 @@ A contract change should follow this sequence:
 7. add focused smoke tests;
 8. run the full regression suite.
 
-## 5. Contract Requirements
+## 6. Contract Requirements
 
 Every important relational contract should state:
 
@@ -142,7 +167,7 @@ Every important relational contract should state:
 - access policy;
 - compatibility notes.
 
-## 6. Warehouse and Mart Contract Work
+## 7. Warehouse and Mart Contract Work
 
 The subject-aware staging contracts are implemented and registered as active
 v1 contracts:
@@ -182,7 +207,7 @@ enabled.
 Do not create contracts for `fact_signal_quality` or device-event models until
 trusted upstream datasets and exact grains exist.
 
-## 7. Privacy Boundary
+## 8. Privacy Boundary
 
 Contracts for subject-aware tables must mark the following as restricted or
 sensitive as appropriate:
@@ -200,7 +225,7 @@ source object lineage
 
 `subject_key` is pseudonymous, not guaranteed anonymous.
 
-## 8. Current Status
+## 9. Current Status
 
 Implemented:
 
@@ -213,10 +238,10 @@ Implemented:
 - Warehouse column classification for all 81 physical columns;
 - enforced dbt model contracts plus Warehouse relationship/reconciliation tests;
 - enforced dbt contracts for the three Phase 7 marts;
-- explicit Silver Parquet schemas.
+- explicit Silver Parquet schemas;
+- code- and manifest-enforced Gold signal-feature v1 contract.
 
 Not implemented yet:
 
 - contracts for deferred signal-quality/device-event facts;
 - registry-backed mart governance contracts/classifications for broader access;
-- Gold contracts.

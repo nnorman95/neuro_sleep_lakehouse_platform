@@ -22,6 +22,7 @@ Staged recording metadata:      110 channels / 3,263 intervals / 35,710 epochs
 Warehouse:                      100 subjects / 18 recordings / 110 channels / 35,710 epochs
 Analytical marts:               18 summary rows / 126 stage rows / 6 coverage rows
 Full-signal subset:             5 recordings / 116,242,840 Silver signal rows
+Gold signal features:           5 recordings / 83,909 rows / 5 Parquet files
 ```
 
 The analytical cohort is larger than the full-signal subset on purpose. Phase 7
@@ -30,7 +31,6 @@ were processed without generating signal Parquet. This expands analytical
 coverage without doing expensive work that the current models do not use.
 
 ## Architecture
-
 ```text
 PhysioNet Sleep-EDF
         |
@@ -42,37 +42,30 @@ streaming HTTP + source manifest + SHA-256 verification
 MinIO Bronze
 immutable EDF/XLS source objects
         |
-        +--> raw.file_registry
-        +--> ops.pipeline_run / ops.file_attempt
-        |
         v
 Python / edfio / NumPy / PyArrow
 parsing + normalization + quality gates
         |
         v
 MinIO Silver
-versioned Parquet + ZSTD + _SUCCESS.json
+versioned Parquet + _SUCCESS.json
         |
-        +--> recordings / channels / intervals / epochs
-        +--> subjects / recording_contexts
-        +--> signal samples for the full-signal subset
-        |
-        v
-PostgreSQL staging
-verified relational landing for current Silver publications
-        |
-        v
-dbt Warehouse Core
-fail-closed selection + deterministic dimensions + epoch fact
-        |
+        +----------------------------+
+        |                            |
+        v                            v
+PostgreSQL staging              Spark 4.2 + S3A
+metadata + epochs              selected signal Parquet
+        |                            |
+        v                            v
+dbt Warehouse Core              MinIO Gold
+        |                       30-second signal features
         v
 dbt Analytics Marts
-recording summary + stage distribution + dataset coverage
 ```
-
-High-volume signal samples stay in MinIO/Parquet. PostgreSQL is used for
-operational metadata, lineage, quality history, staging data, dimensional models,
-and relational analytics.
+High-volume signal samples stay in MinIO/Parquet. PostgreSQL remains the
+relational path for operational metadata, lineage, quality, dimensional models,
+and marts. Spark is used only for the high-volume signal path, and Gold stores the
+compact downstream feature representation.
 
 ## Engineering decisions
 
@@ -162,6 +155,24 @@ The stage-distribution mart always emits seven analytical stages per recording,
 including zero-duration stages. More detail is in
 [`docs/analytics_marts.md`](docs/analytics_marts.md).
 
+### Spark / Gold signal features
+
+```text
+selected Silver signal files:  1,416
+selected Silver signal rows:   116,242,840
+Gold feature rows:                  83,909
+Gold Parquet data files:                 5
+Gold success manifests:                  5
+Gold other objects:                      0
+```
+
+Spark preserves final partial windows, validates sample counts and timing, and
+publishes one compact Gold Parquet file per selected recording. Completed exact
+Gold representations are skipped on rerun.
+
+More detail is in
+[`docs/spark_signal_features.md`](docs/spark_signal_features.md).
+
 ## Validation
 
 Current verified regression status:
@@ -173,6 +184,11 @@ Silver smoke tests:       26/26
 Python smoke total:       58/58
 dbt project:              14 models / 249 data tests
 Full dbt build:           257/257 PASS, 0 WARN, 0 ERROR
+Spark selected-input reconciliation: 116,242,840/116,242,840 rows
+Spark feature validation:             83,909 rows / 5 partial rows
+Gold publication validation:          5/5 recordings / 83,909 rows
+Gold full rerun:                       0 written / 5 skipped
+Gold recovery/fail-closed smoke:       PASS
 ```
 
 The Phase 7 validation also confirmed:
@@ -213,6 +229,11 @@ make smoke
 make reliability-smoke
 make silver-smoke
 make spark-smoke
+make spark-feature-check
+make gold-signal-features
+make gold-signal-features-check
+make gold-reliability-smoke
+make phase8-check
 make test
 make source-check
 make psql

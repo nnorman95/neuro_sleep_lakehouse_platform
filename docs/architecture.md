@@ -1,9 +1,9 @@
 # Architecture
 
-This document describes the platform as implemented through **Phase 7: Analytics
-Marts**. Bronze, Silver, PostgreSQL staging, and the Warehouse Core are already in
-place; Phase 7 adds a small relational analytics layer on top of the trusted
-epoch fact.
+This document describes the platform as implemented through **Phase 8: Spark
+Signal Features**. Bronze, Silver, PostgreSQL staging, the Warehouse Core,
+and relational marts remain in place; Phase 8 adds the high-volume signal
+feature path from selected Silver Parquet to versioned Gold Parquet.
 
 ## 1. Source
 
@@ -30,7 +30,7 @@ They are related, but they are not interchangeable.
 ```text
 Bronze      immutable source EDF/XLS objects
 Silver      validated and versioned Parquet datasets
-Gold        future curated signal/ML features
+Gold        curated versioned signal-feature Parquet
 Quarantine  large rejected/diagnostic payloads when needed
 Logs        persisted runtime log artifacts when needed
 ```
@@ -64,6 +64,12 @@ PhysioNet
   -> Warehouse dimensions + sleep-epoch fact
   -> reusable analytical intermediate models
   -> recording and dataset marts
+
+Selected Warehouse recording representations
+  -> exact Silver signal manifest objects
+  -> Spark 4.2 + S3A
+  -> 30-second recording/channel features
+  -> MinIO Gold + _SUCCESS.json
 ```
 
 Operational execution is tracked in:
@@ -279,48 +285,96 @@ do not add arbitrary scientific exclusion thresholds or clinical conclusions.
 
 See [`analytics_marts.md`](analytics_marts.md) for grains and formulas.
 
-## 12. Scale boundary
+## 12. Spark signal feature path
 
-PostgreSQL is used for:
+Phase 8 processes only the signal representations selected by the Warehouse.
 
-- operational metadata and lineage;
-- quality and quarantine metadata;
-- subject/recording/channel/interval/epoch staging data;
-- dimensional models;
-- low-volume relational marts.
+```text
+warehouse.dim_recording
+  -> current silver_recording_id + silver_output_prefix
+  -> exact signals/*.parquet inventory from Silver _SUCCESS.json
+  -> Spark S3A read from MinIO
+  -> group by recording_id + channel_id + epoch_number
+  -> descriptive 30-second features
+  -> pre-publication validation
+  -> one compact Gold Parquet data file per recording
+  -> Spark read-back validation
+  -> Gold _SUCCESS.json written last
+```
 
-PostgreSQL is **not** used as row-by-row storage for raw signal samples. The
-current 116M+ signal rows remain in Parquet in MinIO. Later signal features can
-be computed with a distributed/high-volume engine and only loaded into
-PostgreSQL when their grain and use are clear.
+Current verified input and output:
 
-## 13. Current validation baseline
+```text
+selected recordings:          5
+Silver signal files:      1,416
+Silver signal rows:  116,242,840
+Gold feature rows:          83,909
+Gold data files:                 5
+Gold manifests:                  5
+```
+
+The feature set includes mean, population standard deviation, minimum, maximum,
+peak-to-peak, RMS, sample coverage, window timing, and lineage fields. A final
+partial signal window is preserved; ST7011J currently contributes five partial
+feature rows, one per channel.
+
+Gold publication is immutable by selected Silver `recording_id`. An unchanged
+completed publication is skipped. An incomplete exact prefix without
+`_SUCCESS.json` can be recovered and rebuilt. A completed but invalid prefix
+fails closed and is not auto-deleted.
+
+See [`spark_signal_features.md`](spark_signal_features.md).
+
+## 13. Scale boundary
+
+PostgreSQL is used for operational metadata, lineage, quality metadata, staging,
+dimensional models, and low-volume relational marts.
+
+Sample-level signals are not loaded row-by-row into PostgreSQL. The current
+116,242,840 selected signal rows remain trusted Silver Parquet. Spark performs the
+high-volume aggregation close to object storage, and Gold contains the compact
+83,909-row feature representation.
+
+The current local data size does not justify a separate Spark cluster. `local[*]`
+keeps the execution path simpler while still exercising Spark, S3A, Parquet
+aggregation, small-file handling, and Gold publication.
+
+## 14. Current validation baseline
+
+Relational baseline:
 
 ```text
 Core smoke tests:         15/15
 Reliability smoke tests:  17/17
 Silver smoke tests:       26/26
-Python smoke total:       58/58
 dbt models:               14
 dbt data tests:           249
 Full dbt build:           257/257 PASS
 ```
 
-Phase 7 validation also confirmed 18 recording summaries, 126 recording-stage
-rows, 6 coverage rows, preservation of the non-zero epoch starts in `ST7091J`
-and `ST7161J`, and identical recording-summary content across two consecutive
-full rebuilds.
+Phase 8 has additionally verified:
 
-## 14. Next architectural scope
+```text
+Spark / Java / Hadoop runtime:                 PASS
+selected Silver signal input:  1,416 files / 116,242,840 rows
+Spark S3A reconciliation:      116,242,840/116,242,840 rows
+feature transformation:        83,909 rows / 5 partial rows
+Gold publication:              5 data files / 5 manifests
+Gold read-back validation:     83,909/83,909 rows
+full Gold rerun:               0 written / 5 skipped
+Gold recovery/fail-closed smoke: PASS
+```
 
-Still outside the current implemented analytical path:
+## 15. Next architectural scope
 
-- distributed signal-feature processing;
-- curated Gold signal/ML features;
-- device-event/Kafka models;
-- window-level analytical signal-quality facts;
+Still outside Phase 8:
+
+- joining Gold signal features to sleep-stage and Warehouse analytical context;
+- orchestration with Airflow;
+- device-event streaming with Kafka;
+- broader quality hardening and operational observability;
 - dashboards and broader BI access;
 - full-source processing.
 
-Those layers should be added only when their upstream datasets, grain, and use
-are explicit.
+Those layers should be added only when their upstream datasets, grain, and use are
+explicit.
