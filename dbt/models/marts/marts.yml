@@ -1,0 +1,277 @@
+version: 2
+
+models:
+  - name: mart_recording_stage_distribution
+    description: >
+      Consumer-facing long-format sleep-stage distribution. Grain is one
+      recording plus one analytical stage. Every current Warehouse recording
+      exposes all seven analytical stages, including zero-duration stages.
+    columns:
+      - name: recording_sk
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_recording')
+                field: recording_sk
+      - name: subject_sk
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subject')
+                field: subject_sk
+      - name: recording_key
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: source_system
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: dataset_version
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: collection
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: night_number
+        data_type: smallint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: treatment
+        data_type: text
+      - name: age_years
+        data_type: smallint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: sex
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: analytical_stage_code
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [W, N1, N2, N3, REM, UNKNOWN, MOVEMENT]
+      - name: epoch_count
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: duration_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: pct_of_annotated_time
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: pct_of_sleep_time
+        data_type: double precision
+
+  - name: mart_recording_sleep_summary
+    description: >
+      Main descriptive recording mart. Grain is one current logical recording.
+      The model exposes sleep architecture and structural annotation coverage
+      while preserving collection, night, treatment, age, and sex context.
+    columns:
+      - name: recording_sk
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_recording')
+                field: recording_sk
+      - name: subject_sk
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subject')
+                field: subject_sk
+      - name: recording_key
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: source_system
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: dataset_version
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: collection
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: night_number
+        data_type: smallint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: treatment
+        data_type: text
+      - name: age_years
+        data_type: smallint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: sex
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: psg_duration_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: annotated_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: scored_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: sleep_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: wake_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: n1_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: n2_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: n3_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: rem_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: unknown_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: movement_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: annotation_coverage_pct
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: sleep_pct_of_scored_time
+        data_type: double precision
+      - name: first_annotated_epoch
+        data_type: integer
+        constraints: [{type: not_null}]
+      - name: last_annotated_epoch
+        data_type: integer
+        constraints: [{type: not_null}]
+      - name: first_sleep_epoch
+        data_type: integer
+      - name: last_sleep_epoch
+        data_type: integer
+      - name: analytical_stage_transition_count
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: unannotated_head_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: unannotated_tail_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: unannotated_total_minutes
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: has_unannotated_head
+        data_type: boolean
+        constraints: [{type: not_null}]
+      - name: has_unannotated_tail
+        data_type: boolean
+        constraints: [{type: not_null}]
+
+  - name: mart_dataset_coverage
+    description: >
+      Descriptive cohort coverage by source, dataset version, collection,
+      night, and treatment. It reports what material is available and does not
+      encode statistical representativeness or scientific exclusion thresholds.
+    columns:
+      - name: source_system
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: dataset_version
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: collection
+        data_type: text
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: night_number
+        data_type: smallint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: treatment
+        data_type: text
+      - name: subject_count
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: recording_count
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: psg_hours
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: annotated_hours
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: scored_hours
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: sleep_hours
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: wake_hours
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: unknown_hours
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: movement_hours
+        data_type: double precision
+        constraints: [{type: not_null}]
+      - name: annotation_coverage_pct
+        data_type: double precision
+        constraints: [{type: not_null}]
+        data_tests: [not_null]
+      - name: recordings_with_unannotated_head
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: recordings_with_unannotated_tail
+        data_type: bigint
+        constraints: [{type: not_null}]
