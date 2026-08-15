@@ -5,10 +5,10 @@ sleep-neuroscience data. It ingests source files from PhysioNet, keeps the raw
 objects immutable, creates validated Silver Parquet datasets, loads relational
 metadata into PostgreSQL, and builds analytical models with dbt.
 
-The current branch implements **Phase 7: Analytics Marts** on top of the completed
-Warehouse Core. The relational analytical path now covers 18 Sleep-EDF recordings
-and exposes three consumption-ready marts for recording summaries, sleep-stage
-distribution, and dataset coverage.
+Phase 7 is complete and released as `v0.4.0-analytics`. The current development
+branch starts **Phase 8: Spark Signal Features**. Spark is introduced for the
+high-volume Silver signal path while PostgreSQL and dbt remain responsible for
+relational analytics.
 
 ## Current state
 
@@ -212,6 +212,7 @@ make migrate
 make smoke
 make reliability-smoke
 make silver-smoke
+make spark-smoke
 make test
 make source-check
 make psql
@@ -234,10 +235,10 @@ PYTHONPATH=src python scripts/load_recording_staging.py
 v0.1.0-bronze
 v0.2.0-silver
 v0.3.0-warehouse
+v0.4.0-analytics
 ```
 
-Phase 7 is implemented on the current development branch and has not yet been
-published as a release tag.
+Phase 8 development continues on `phase/8-spark-signal-features`.
 
 ## Documentation
 

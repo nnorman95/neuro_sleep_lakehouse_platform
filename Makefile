@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke test source-check psql clean-pycache
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke test source-check psql clean-pycache
 
 help:
 	@echo "NeuroSleep local commands"
@@ -12,6 +12,7 @@ help:
 	@echo "make smoke              Run core platform smoke tests"
 	@echo "make reliability-smoke  Run reliability and failure tests"
 	@echo "make silver-smoke       Run Silver-layer smoke tests"
+	@echo "make spark-smoke        Run Spark smoke tests"
 	@echo "make test               Run all test suites"
 	@echo "make source-check       Check Sleep-EDF source configuration"
 	@echo "make psql               Open PostgreSQL psql shell"
@@ -44,7 +45,10 @@ reliability-smoke:
 silver-smoke:
 	./scripts/run_silver_smoke_tests.sh
 
-test: smoke reliability-smoke silver-smoke
+spark-smoke:
+	./scripts/run_spark_smoke_tests.sh
+
+test: smoke reliability-smoke silver-smoke spark-smoke
 
 source-check:
 	PYTHONPATH=src python -m neuro_sleep.sources.sleep_edf
