@@ -5,6 +5,7 @@
 - macOS or another Docker-supported development system;
 - Docker Desktop;
 - Python 3.11 or newer;
+- Java 21;
 - Make;
 - Git.
 
@@ -12,6 +13,10 @@ The current verified environment uses:
 
 ```text
 Python 3.13.5
+Java 21.0.12
+PySpark 4.2.0
+Spark 4.2.0
+Hadoop 3.5.0
 PostgreSQL 18.4
 MinIO API port 9000
 MinIO console port 9001
@@ -130,21 +135,32 @@ DATA_PROFILE=full
 
 ## 8. Validation
 
+Common suites:
+
 ```bash
 make smoke
 make reliability-smoke
 make silver-smoke
+make spark-smoke
+make gold-reliability-smoke
 make test
 ```
 
-`make test` runs all three suites. Current verified result:
+High-volume feature and Gold checks are kept explicit:
 
-```text
-15/15 core
-17/17 reliability
-24/24 Silver
-56/56 total
+```bash
+make spark-feature-check
+make gold-signal-features-check
 ```
+
+The complete Phase 8 regression path is:
+
+```bash
+make phase8-check
+```
+
+It runs the normal smoke suites, full Spark feature validation, Gold publication
+validation, and a full dbt build.
 
 ## 9. Run Extract
 
@@ -192,21 +208,61 @@ Load current recording metadata into PostgreSQL staging:
 PYTHONPATH=src python scripts/load_recording_staging.py
 ```
 
-The current recording staging load writes 5 recordings, 33 channels,
-834 annotation intervals, and 12,224 epochs. It processes only the four
+The current recording staging state contains 18 recordings, 110 channels,
+3,263 annotation intervals, and 35,710 epochs. It processes only the four
 metadata Parquet datasets for each current publication; signal samples remain
 in MinIO. An unchanged rerun returns `skipped`.
 
 Completed Silver production outputs should also return `skipped` on an
 unchanged rerun.
 
-## 11. Stop Services
+## 11. Run Spark and Gold
+
+Spark uses the local Java runtime plus PySpark from the project virtual
+environment. The S3A dependency is resolved through the Spark package argument
+embedded in the project run scripts.
+
+Check runtime and exact Silver input reconciliation:
+
+```bash
+make spark-smoke
+```
+
+Validate feature transformation over the current selected signal set:
+
+```bash
+make spark-feature-check
+```
+
+Build missing Gold signal-feature publications or safely skip completed ones:
+
+```bash
+make gold-signal-features
+```
+
+Validate completed Gold outputs:
+
+```bash
+make gold-signal-features-check
+```
+
+Test Gold partial-output recovery and fail-closed behavior:
+
+```bash
+make gold-reliability-smoke
+```
+
+See [`spark_signal_features.md`](spark_signal_features.md) for the feature grain,
+Gold layout, and publication semantics.
+
+## 12. Stop Services
+
 
 ```bash
 make down
 ```
 
-## 12. Git Safety
+## 13. Git Safety
 
 Before every commit:
 

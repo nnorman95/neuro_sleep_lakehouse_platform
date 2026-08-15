@@ -88,19 +88,47 @@ rebuild them. A completed valid prefix is preserved and skipped on rerun.
 
 ## 6. Gold Layout
 
-`gold` is reserved for future curated high-volume analytical and ML-ready
-Parquet outputs.
-
-Gold is not the same thing as PostgreSQL `mart`:
+Phase 8 implements the first Gold dataset: 30-second signal features.
 
 ```text
-Gold  object-storage analytical datasets
-mart  PostgreSQL consumption models
+gold/
+  physionet/sleep-edfx/<dataset-version>/
+    signal_features/
+      <collection>/
+        <recording-key>/
+          schema_version=1.0.0/
+            feature_version=1.0.0/
+              input_recording_id=<silver-recording-id>/
+                data/
+                  part-*.snappy.parquet
+                _SUCCESS.json
 ```
 
-The Warehouse Core semantics are now implemented and validated. Gold and mart
-outputs still require explicit downstream grains and trusted upstream feature or
-aggregate datasets before implementation.
+Gold and PostgreSQL `mart` remain different layers:
+
+```text
+Gold  object-storage analytical feature datasets
+mart  PostgreSQL relational consumption models
+```
+
+`input_recording_id` binds the Gold representation to one concrete selected
+Silver representation. A future selected Silver version produces a new immutable
+Gold prefix rather than overwriting historical output.
+
+The Gold success manifest is written after the Parquet data has passed read-back
+validation. A valid completed prefix is skipped on rerun. An incomplete exact
+prefix without `_SUCCESS.json` can be removed and rebuilt. A prefix with a
+success manifest is never auto-deleted by recovery logic.
+
+Current verified physical state:
+
+```text
+5 Parquet data files
+5 _SUCCESS.json manifests
+0 other objects
+83,909 feature rows
+4.328 MiB Parquet
+```
 
 ## 7. Quarantine Layout
 
