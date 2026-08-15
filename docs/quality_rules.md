@@ -167,6 +167,10 @@ General rules:
 - annotation duration must be positive;
 - emitted epoch duration must equal 30 seconds;
 - emitted epoch number must be unique within one concrete Silver recording;
+- emitted epoch numbers preserve their positions on the PSG timeline and may
+  start above zero when annotation coverage begins after PSG start;
+- emitted epoch numbers must remain ordered and contiguous across the emitted
+  sequence; real internal gaps or overlaps remain errors;
 - source intervals may begin before PSG time zero;
 - emitted epoch start positions remain non-negative;
 - signal chunks must stay within the requested extraction range.
@@ -185,13 +189,14 @@ Implemented behavior:
 
 ### Telemetry undercoverage
 
-Telemetry can have a non-30-second-aligned recording duration and an unannotated
-PSG tail.
+Telemetry can have a non-30-second-aligned recording duration and unannotated
+PSG head or tail coverage.
 
 Implemented behavior:
 
 ```text
 non-aligned recording duration -> warning
+unannotated PSG head           -> warning
 unannotated PSG tail           -> warning
 real emitted epoch past PSG    -> error
 ```
@@ -296,6 +301,7 @@ Warnings currently supported include:
 - special source stage labels;
 - Cassette trailing annotation overhang;
 - Telemetry non-aligned duration;
+- Telemetry unannotated PSG head;
 - Telemetry unannotated PSG tail.
 
 Errors include:
