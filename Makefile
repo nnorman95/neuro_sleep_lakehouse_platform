@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check phase8-check test source-check psql clean-pycache
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check phase8-check test source-check psql clean-pycache
 
 help:
 	@echo "NeuroSleep local commands"
@@ -18,6 +18,8 @@ help:
 	@echo "make gold-signal-features-check Validate Gold signal features"
 	@echo "make gold-reliability-smoke Test Gold recovery and fail-closed behavior"
 	@echo "make feature-integration-check Validate Gold + Warehouse feature integration"
+	@echo "make integrated-signal-features Publish integrated Gold signal features"
+	@echo "make integrated-signal-features-check Validate integrated Gold signal features"
 	@echo "make phase8-check         Run complete Phase 8 regression"
 	@echo "make test               Run all test suites"
 	@echo "make source-check       Check Sleep-EDF source configuration"
@@ -68,6 +70,12 @@ gold-reliability-smoke:
 
 feature-integration-check:
 	./scripts/run_feature_integration_validation.sh
+
+integrated-signal-features:
+	./scripts/run_integrated_signal_features.sh
+
+integrated-signal-features-check:
+	./scripts/validate_integrated_signal_features.sh
 
 phase8-check:
 	./scripts/validate_phase8.sh
