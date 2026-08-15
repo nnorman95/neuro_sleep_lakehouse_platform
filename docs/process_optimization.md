@@ -173,13 +173,48 @@ make spark-feature-check
 make gold-signal-features
 make gold-signal-features-check
 make gold-reliability-smoke
+make feature-integration-check
+make integrated-signal-features
+make integrated-signal-features-check
+make integrated-gold-reliability-smoke
 make phase8-check
+make phase9-check
 ```
 
 This reduces the need to remember long combinations of Python module paths,
 `PYTHONPATH`, Spark package arguments, and individual smoke scripts.
 
-## 10. What is deliberately not optimized
+## 10. Phase 9 integration reuse
+
+Phase 9 reuses the compact Phase 8 Gold feature layer instead of repeating the
+sample-level Spark aggregation.
+
+```text
+Silver signal source:
+116,242,840 sample rows
+
+Phase 8 reusable Gold:
+5 Parquet files
+83,909 feature rows
+
+Phase 9 integration input:
+the same 5 compact Gold feature files
++ Warehouse context
+
+Phase 9 output:
+5 integrated Parquet files
+83,909 rows
+```
+
+Signal feature calculation and relational label/context integration can change
+independently. An unchanged source Gold publication and unchanged Warehouse
+context produce an already-completed integrated prefix that is skipped.
+
+The Warehouse context receives a deterministic SHA-256 fingerprint. If the
+context changes, Phase 9 produces a new immutable representation rather than
+requiring manual cleanup or overwriting historical output.
+
+## 11. What is deliberately not optimized
 
 The project does not currently add:
 
@@ -194,7 +229,7 @@ These omissions are part of the optimization strategy: operational simplicity is
 preferred over infrastructure or tuning that does not solve a demonstrated
 problem.
 
-## 11. Evidence to preserve in later phases
+## 12. Evidence to preserve in later phases
 
 Later phases should continue recording evidence such as:
 

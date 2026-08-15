@@ -1,9 +1,10 @@
 # Architecture
 
-This document describes the platform as implemented through **Phase 8: Spark
-Signal Features**. Bronze, Silver, PostgreSQL staging, the Warehouse Core,
-and relational marts remain in place; Phase 8 adds the high-volume signal
-feature path from selected Silver Parquet to versioned Gold Parquet.
+This document describes the platform as implemented through **Phase 9:
+Feature Integration**. Bronze, Silver, PostgreSQL staging, the Warehouse Core,
+relational marts, and the Phase 8 signal-feature path remain in place. Phase 9
+adds a separate integrated Gold representation combining reusable signal
+features with Warehouse analytical context.
 
 ## 1. Source
 
@@ -30,7 +31,7 @@ They are related, but they are not interchangeable.
 ```text
 Bronze      immutable source EDF/XLS objects
 Silver      validated and versioned Parquet datasets
-Gold        curated versioned signal-feature Parquet
+Gold        curated versioned signal-feature and integrated-feature Parquet
 Quarantine  large rejected/diagnostic payloads when needed
 Logs        persisted runtime log artifacts when needed
 ```
@@ -69,7 +70,12 @@ Selected Warehouse recording representations
   -> exact Silver signal manifest objects
   -> Spark 4.2 + S3A
   -> 30-second recording/channel features
-  -> MinIO Gold + _SUCCESS.json
+  -> MinIO Gold signal_features + _SUCCESS.json
+
+Gold signal_features + Warehouse subject/recording/channel/epoch context
+  -> Spark feature integration
+  -> preserve unlabeled signal windows
+  -> MinIO Gold integrated_signal_features + _SUCCESS.json
 ```
 
 Operational execution is tracked in:
@@ -80,7 +86,6 @@ ops.file_attempt
 quality.quality_check_results
 quality.quarantine_records
 ```
-
 ## 4. Bronze architecture
 
 Bronze keeps the source layout under:
@@ -365,16 +370,57 @@ full Gold rerun:               0 written / 5 skipped
 Gold recovery/fail-closed smoke: PASS
 ```
 
-## 15. Next architectural scope
+## 15. Phase 9 feature integration
 
-Still outside Phase 8:
+Phase 9 keeps the Phase 8 feature grain:
 
-- joining Gold signal features to sleep-stage and Warehouse analytical context;
+```text
+recording_id + channel_id + epoch_number
+```
+
+The signal side comes from the five compact Phase 8 Gold Parquet files rather
+than from the 116,242,840 Silver sample rows. Warehouse recording/channel
+context is resolved by concrete Silver identity. Sleep-stage context is
+left-joined by `recording_id + epoch_number`.
+
+Current integrated output:
+
+```text
+83,909 total rows
+83,384 rows with sleep-stage context
+525 rows without sleep-stage context
+5 Parquet data files
+```
+
+All 525 unlabeled rows belong to the real signal tail of `ST7011J`. No
+sleep-stage value is fabricated.
+
+Integrated publication identity includes:
+
+```text
+schema_version
+feature_version
+integration_version
+input_recording_id
+warehouse_context_sha256
+```
+
+The Warehouse fingerprint makes the integrated representation immutable with
+respect to both the selected signal representation and the relational context.
+Completed exact outputs are skipped. Incomplete prefixes without
+`_SUCCESS.json` can be rebuilt; completed invalid prefixes fail closed.
+
+See [`feature_integration.md`](feature_integration.md).
+
+## 16. Next architectural scope
+
+Still outside Phase 9:
+
 - orchestration with Airflow;
 - device-event streaming with Kafka;
 - broader quality hardening and operational observability;
 - dashboards and broader BI access;
 - full-source processing.
 
-Those layers should be added only when their upstream datasets, grain, and use are
-explicit.
+Those layers should be added only when their upstream datasets, grain, and use
+are explicit.

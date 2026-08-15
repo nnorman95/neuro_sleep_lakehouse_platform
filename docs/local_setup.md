@@ -143,25 +143,29 @@ make reliability-smoke
 make silver-smoke
 make spark-smoke
 make gold-reliability-smoke
+make integrated-gold-reliability-smoke
 make test
 ```
 
-High-volume feature and Gold checks are kept explicit:
+High-volume feature and Gold checks are explicit:
 
 ```bash
 make spark-feature-check
 make gold-signal-features-check
+make feature-integration-check
+make integrated-signal-features-check
 ```
 
-The complete Phase 8 regression path is:
+Complete milestone regressions:
 
 ```bash
 make phase8-check
+make phase9-check
 ```
 
-It runs the normal smoke suites, full Spark feature validation, Gold publication
+`phase9-check` runs the normal smoke suites, full Spark feature validation,
+source Gold validation, feature integration validation, integrated Gold
 validation, and a full dbt build.
-
 ## 9. Run Extract
 
 Example one-recording Extract:
@@ -234,27 +238,51 @@ Validate feature transformation over the current selected signal set:
 make spark-feature-check
 ```
 
-Build missing Gold signal-feature publications or safely skip completed ones:
+Build missing Phase 8 Gold signal-feature publications or skip completed ones:
 
 ```bash
 make gold-signal-features
 ```
 
-Validate completed Gold outputs:
+Validate Phase 8 Gold outputs:
 
 ```bash
 make gold-signal-features-check
 ```
 
-Test Gold partial-output recovery and fail-closed behavior:
+Test Phase 8 Gold recovery and fail-closed behavior:
 
 ```bash
 make gold-reliability-smoke
 ```
 
-See [`spark_signal_features.md`](spark_signal_features.md) for the feature grain,
-Gold layout, and publication semantics.
+Validate Gold-to-Warehouse integration without publishing:
 
+```bash
+make feature-integration-check
+```
+
+Build or safely skip integrated Gold publications:
+
+```bash
+make integrated-signal-features
+```
+
+Validate completed integrated Gold publications:
+
+```bash
+make integrated-signal-features-check
+```
+
+Test integrated Gold recovery and fail-closed behavior:
+
+```bash
+make integrated-gold-reliability-smoke
+```
+
+See [`spark_signal_features.md`](spark_signal_features.md) for the Phase 8
+feature path and [`feature_integration.md`](feature_integration.md) for Phase 9
+join semantics, lineage, and publication behavior.
 ## 12. Stop Services
 
 

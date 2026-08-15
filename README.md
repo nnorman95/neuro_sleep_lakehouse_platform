@@ -5,10 +5,10 @@ sleep-neuroscience data. It ingests source files from PhysioNet, keeps the raw
 objects immutable, creates validated Silver Parquet datasets, loads relational
 metadata into PostgreSQL, and builds analytical models with dbt.
 
-Phase 7 is complete and released as `v0.4.0-analytics`. The current development
-branch starts **Phase 8: Spark Signal Features**. Spark is introduced for the
-high-volume Silver signal path while PostgreSQL and dbt remain responsible for
-relational analytics.
+Phase 8 is complete and released as `v0.5.0-features`. Phase 9 adds
+**Feature Integration**: compact Gold signal features are joined to Warehouse
+subject, recording, channel, and optional sleep-stage context without
+recomputing sample-level signals.
 
 ## Current state
 
@@ -23,6 +23,7 @@ Warehouse:                      100 subjects / 18 recordings / 110 channels / 35
 Analytical marts:               18 summary rows / 126 stage rows / 6 coverage rows
 Full-signal subset:             5 recordings / 116,242,840 Silver signal rows
 Gold signal features:           5 recordings / 83,909 rows / 5 Parquet files
+Integrated Gold features:       5 recordings / 83,909 rows / 83,384 labeled / 525 unlabeled
 ```
 
 The analytical cohort is larger than the full-signal subset on purpose. Phase 7
@@ -31,6 +32,7 @@ were processed without generating signal Parquet. This expands analytical
 coverage without doing expensive work that the current models do not use.
 
 ## Architecture
+
 ```text
 PhysioNet Sleep-EDF
         |
@@ -57,16 +59,28 @@ PostgreSQL staging              Spark 4.2 + S3A
 metadata + epochs              selected signal Parquet
         |                            |
         v                            v
-dbt Warehouse Core              MinIO Gold
+dbt Warehouse Core              MinIO Gold signal_features
         |                       30-second signal features
+        |                            |
+        +-------------+--------------+
+                      |
+                      v
+              Spark Feature Integration
+                      |
+                      v
+              MinIO Gold integrated_signal_features
+              features + Warehouse context
+
+dbt Warehouse Core
+        |
         v
 dbt Analytics Marts
 ```
+
 High-volume signal samples stay in MinIO/Parquet. PostgreSQL remains the
 relational path for operational metadata, lineage, quality, dimensional models,
-and marts. Spark is used only for the high-volume signal path, and Gold stores the
-compact downstream feature representation.
-
+and marts. Spark handles the high-volume signal path and the compact
+Gold-to-Warehouse feature integration.
 ## Engineering decisions
 
 A few design choices are deliberate:
@@ -173,25 +187,48 @@ Gold representations are skipped on rerun.
 More detail is in
 [`docs/spark_signal_features.md`](docs/spark_signal_features.md).
 
+### Phase 9 integrated signal features
+
+```text
+Integrated feature rows:        83,909
+Rows with sleep-stage label:    83,384
+Rows without sleep-stage label:    525
+Integrated Parquet data files:       5
+```
+
+Every Gold feature row resolves Warehouse recording/channel context. Sleep-stage
+context is a left join, so real signal windows without a source hypnogram label
+are preserved rather than dropped or assigned an invented stage.
+
+The integrated publication is immutable, includes a deterministic Warehouse
+context fingerprint, validates source Gold lineage, and skips completed exact
+representations on rerun.
+
+More detail is in
+[`docs/feature_integration.md`](docs/feature_integration.md).
 ## Validation
 
 Current verified regression status:
 
 ```text
-Core smoke tests:         15/15
-Reliability smoke tests:  17/17
-Silver smoke tests:       26/26
-Python smoke total:       58/58
-dbt project:              14 models / 249 data tests
-Full dbt build:           257/257 PASS, 0 WARN, 0 ERROR
-Spark selected-input reconciliation: 116,242,840/116,242,840 rows
-Spark feature validation:             83,909 rows / 5 partial rows
-Gold publication validation:          5/5 recordings / 83,909 rows
-Gold full rerun:                       0 written / 5 skipped
-Gold recovery/fail-closed smoke:       PASS
+Core smoke tests:                         15/15
+Reliability smoke tests:                  17/17
+Silver smoke tests:                       26/26
+Python smoke total:                       58/58
+dbt project:                              14 models / 249 data tests
+Full dbt build:                           257/257 PASS, 0 WARN, 0 ERROR
+Spark selected-input reconciliation:      116,242,840/116,242,840 rows
+Spark feature validation:                 83,909 rows / 5 partial rows
+Gold publication validation:              5/5 recordings / 83,909 rows
+Gold full rerun:                           0 written / 5 skipped
+Gold recovery/fail-closed smoke:           PASS
+Feature integration validation:           83,909 rows / 83,384 labeled / 525 unlabeled
+Integrated Gold publication:              5/5 recordings / 83,909 rows
+Integrated Gold full rerun:               0 written / 5 skipped
+Integrated Gold recovery/fail-closed:     PASS
 ```
 
-The Phase 7 validation also confirmed:
+The Phase 7 relational baseline also confirms:
 
 ```text
 recording summary rows:        18
@@ -203,7 +240,6 @@ ST7161J first annotated epoch:  14
 
 Two consecutive full dbt rebuilds produced the same recording-summary content
 checksum, providing a direct regression check for deterministic rebuild behavior.
-
 ## Local setup
 
 ```bash
@@ -233,7 +269,12 @@ make spark-feature-check
 make gold-signal-features
 make gold-signal-features-check
 make gold-reliability-smoke
+make feature-integration-check
+make integrated-signal-features
+make integrated-signal-features-check
+make integrated-gold-reliability-smoke
 make phase8-check
+make phase9-check
 make test
 make source-check
 make psql
@@ -257,15 +298,19 @@ v0.1.0-bronze
 v0.2.0-silver
 v0.3.0-warehouse
 v0.4.0-analytics
+v0.5.0-features
 ```
 
-Phase 8 development continues on `phase/8-spark-signal-features`.
-
+Phase 9 extends the released feature layer with Warehouse-aware integrated Gold
+data while preserving the reusable Phase 8 signal-feature dataset.
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/data_flow.md`](docs/data_flow.md)
 - [`docs/analytics_marts.md`](docs/analytics_marts.md)
+- [`docs/spark_signal_features.md`](docs/spark_signal_features.md)
+- [`docs/feature_integration.md`](docs/feature_integration.md)
+- [`docs/process_optimization.md`](docs/process_optimization.md)
 - [`docs/data_model.md`](docs/data_model.md)
 - [`docs/database_schemas.md`](docs/database_schemas.md)
 - [`docs/data_contracts.md`](docs/data_contracts.md)

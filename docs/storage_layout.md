@@ -88,7 +88,7 @@ rebuild them. A completed valid prefix is preserved and skipped on rerun.
 
 ## 6. Gold Layout
 
-Phase 8 implements the first Gold dataset: 30-second signal features.
+Phase 8 implements reusable 30-second signal features:
 
 ```text
 gold/
@@ -104,6 +104,24 @@ gold/
                 _SUCCESS.json
 ```
 
+Phase 9 adds a separate integrated representation:
+
+```text
+gold/
+  physionet/sleep-edfx/<dataset-version>/
+    integrated_signal_features/
+      <collection>/
+        <recording-key>/
+          schema_version=1.0.0/
+            feature_version=1.0.0/
+              integration_version=1.0.0/
+                input_recording_id=<silver-recording-id>/
+                  warehouse_context_sha256=<sha256>/
+                    data/
+                      part-*.snappy.parquet
+                    _SUCCESS.json
+```
+
 Gold and PostgreSQL `mart` remain different layers:
 
 ```text
@@ -111,16 +129,16 @@ Gold  object-storage analytical feature datasets
 mart  PostgreSQL relational consumption models
 ```
 
-`input_recording_id` binds the Gold representation to one concrete selected
-Silver representation. A future selected Silver version produces a new immutable
-Gold prefix rather than overwriting historical output.
+`input_recording_id` binds both Gold representations to one concrete selected
+Silver representation. The integrated path additionally binds to the Warehouse
+integration context through `warehouse_context_sha256`.
 
-The Gold success manifest is written after the Parquet data has passed read-back
-validation. A valid completed prefix is skipped on rerun. An incomplete exact
-prefix without `_SUCCESS.json` can be removed and rebuilt. A prefix with a
-success manifest is never auto-deleted by recovery logic.
+Success manifests are written only after Parquet read-back validation. A valid
+completed prefix is skipped on rerun. An incomplete exact prefix without
+`_SUCCESS.json` can be removed and rebuilt. A prefix with a success manifest is
+never auto-deleted by recovery logic.
 
-Current verified physical state:
+Verified Phase 8 signal-feature state:
 
 ```text
 5 Parquet data files
@@ -130,6 +148,15 @@ Current verified physical state:
 4.328 MiB Parquet
 ```
 
+Verified Phase 9 integrated state:
+
+```text
+5 Parquet data files
+5 _SUCCESS.json manifests
+83,909 integrated rows
+83,384 labeled rows
+525 unlabeled rows
+```
 ## 7. Quarantine Layout
 
 Large rejected or diagnostic payloads are stored in `quarantine`. PostgreSQL
