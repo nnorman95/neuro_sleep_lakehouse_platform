@@ -54,3 +54,6 @@ scripts/sql/seeds/038_seed_staging_silver_recording_logical_identity_classificat
 # Warehouse Core governance
 scripts/sql/seeds/039_seed_data_contract_registry_warehouse_core.sql
 scripts/sql/seeds/040_seed_column_classification_warehouse_core.sql
+# Silver quarantine routing hardening
+scripts/sql/migrations/041_add_quality_quarantine_active_identity.sql
+scripts/sql/seeds/042_seed_data_contract_registry_quality_quarantine_records_v2.sql

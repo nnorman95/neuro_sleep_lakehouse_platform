@@ -5,7 +5,7 @@ set -euo pipefail
 export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 
 current=0
-total=24
+total=26
 
 
 run_test() {
@@ -88,6 +88,10 @@ run_test \
     "neuro_sleep.silver.quality_checks_smoke"
 
 run_test \
+    "Check non-zero epoch quality regression" \
+    "neuro_sleep.silver.nonzero_epoch_quality_smoke"
+
+run_test \
     "Check Silver batch discovery" \
     "neuro_sleep.silver.batch_discovery_smoke"
 
@@ -118,6 +122,10 @@ run_test \
 run_test \
     "Check durable Silver quality history" \
     "neuro_sleep.silver.silver_quality_history_smoke"
+
+run_test \
+    "Check Silver quarantine routing" \
+    "neuro_sleep.silver.quarantine_routing_smoke"
 
 run_test \
     "Check tracked Silver job observability" \

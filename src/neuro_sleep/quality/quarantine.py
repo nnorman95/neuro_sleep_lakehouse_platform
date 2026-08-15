@@ -153,6 +153,159 @@ def get_quarantine_record(quarantine_id: QuarantineId) -> tuple:
             return row
 
 
+
+def upsert_active_quarantine_record(
+    source_system: str,
+    record_key: str,
+    error_code: str,
+    error_message: str,
+    severity: str = "error",
+    source_file_id: FileId | None = None,
+    raw_payload: dict[str, Any] | list[Any] | None = None,
+    pipeline_run_id: RunId | None = None,
+    payload_bucket: str | None = None,
+    payload_object_key: str | None = None,
+    payload_size_bytes: int | None = None,
+    payload_checksum_sha256: str | None = None,
+) -> UUID:
+    _validate_severity(severity)
+    _validate_non_negative_optional(
+        "payload_size_bytes",
+        payload_size_bytes,
+    )
+
+    cleaned_record_key = record_key.strip()
+
+    if not cleaned_record_key:
+        raise ValueError(
+            "record_key cannot be empty"
+        )
+
+    payload_value = (
+        Jsonb(raw_payload)
+        if raw_payload is not None
+        else None
+    )
+
+    with get_postgres_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into quality.quarantine_records (
+                    source_system,
+                    source_file_id,
+                    record_key,
+                    raw_payload,
+                    error_code,
+                    error_message,
+                    severity,
+                    pipeline_run_id,
+                    status,
+                    payload_bucket,
+                    payload_object_key,
+                    payload_size_bytes,
+                    payload_checksum_sha256
+                )
+                values (
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    'open',
+                    %s,
+                    %s,
+                    %s,
+                    %s
+                )
+                on conflict (
+                    source_system,
+                    record_key,
+                    error_code
+                )
+                where status in (
+                    'open',
+                    'reviewed'
+                )
+                do update set
+                    source_file_id = excluded.source_file_id,
+                    raw_payload = excluded.raw_payload,
+                    error_message = excluded.error_message,
+                    severity = excluded.severity,
+                    detected_at = now(),
+                    pipeline_run_id = excluded.pipeline_run_id,
+                    payload_bucket = excluded.payload_bucket,
+                    payload_object_key = excluded.payload_object_key,
+                    payload_size_bytes = excluded.payload_size_bytes,
+                    payload_checksum_sha256 = excluded.payload_checksum_sha256
+                returning quarantine_id;
+                """,
+                (
+                    source_system,
+                    source_file_id,
+                    cleaned_record_key,
+                    payload_value,
+                    error_code,
+                    error_message,
+                    severity,
+                    pipeline_run_id,
+                    payload_bucket,
+                    payload_object_key,
+                    payload_size_bytes,
+                    payload_checksum_sha256,
+                ),
+            )
+
+            row = cursor.fetchone()
+
+            if row is None:
+                raise RuntimeError(
+                    "Failed to upsert active "
+                    "quarantine record"
+                )
+
+            return row[0]
+
+
+def resolve_active_quarantine_record(
+    source_system: str,
+    record_key: str,
+    error_code: str,
+) -> int:
+    cleaned_record_key = record_key.strip()
+
+    if not cleaned_record_key:
+        raise ValueError(
+            "record_key cannot be empty"
+        )
+
+    with get_postgres_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update quality.quarantine_records
+                set status = 'resolved'
+                where source_system = %s
+                  and record_key = %s
+                  and error_code = %s
+                  and status in (
+                      'open',
+                      'reviewed'
+                  );
+                """,
+                (
+                    source_system,
+                    cleaned_record_key,
+                    error_code,
+                ),
+            )
+
+            return cursor.rowcount
+
+
 def delete_quarantine_record_for_smoke_test(
     source_system: str,
     record_key: str,

@@ -55,6 +55,8 @@ Stores rejected-record metadata and either:
 - a small `raw_payload`; or
 - a pointer to a large object in MinIO `quarantine`.
 
+For Silver quality-gate failures, `record_key` is the stable `silver_bucket/silver_output_prefix` trace key. At most one active (`open` or `reviewed`) quarantine incident exists per `source_system + record_key + error_code`. Repeated failures refresh the same incident. A successful written or skipped rerun resolves it. Runtime, network, database, and object-storage failures remain operational failures and are not misclassified as quarantined data.
+
 ### `quality.quality_check_results`
 
 Stores durable check history with:
@@ -132,7 +134,7 @@ A Silver recording publication requires:
 - a complete `_SUCCESS.json` manifest;
 - successful reconciliation.
 
-Quality errors block `_SUCCESS.json` publication.
+Quality errors block `_SUCCESS.json` publication. Silver quality-gate errors are also routed to `quality.quarantine_records` before the affected run fails; warnings alone do not create quarantine incidents.
 
 ## 6. Sleep-Stage Rules
 
@@ -396,8 +398,8 @@ Current regression status:
 ```text
 Core:          15/15
 Reliability:   17/17
-Silver:        24/24
-Python total:  56/56
+Silver:        26/26
+Python total:  58/58
 Warehouse dbt: 201/201
 ```
 
@@ -420,6 +422,7 @@ Implemented:
 ```text
 Bronze integrity and reconciliation
 Quarantine metadata and payload pointers
+Idempotent Silver quality-gate quarantine routing and resolution lifecycle
 Silver structural quality gate
 Silver warning and error semantics
 Durable quality.quality_check_results history

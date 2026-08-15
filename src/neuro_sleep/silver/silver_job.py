@@ -24,6 +24,10 @@ from neuro_sleep.quality.silver_quality_history import (
     persist_silver_quality_report,
     persist_skipped_silver_quality_result,
 )
+from neuro_sleep.silver.quarantine_routing import (
+    resolve_silver_quality_quarantine,
+    route_failed_silver_quality_report,
+)
 from neuro_sleep.reliability.errors import (
     ConcurrentPipelineRunError,
 )
@@ -159,6 +163,7 @@ def run_tracked_silver_job(
     run_id: UUID | None = None
     heartbeat: PipelineHeartbeat | None = None
 
+    records_quarantined = 0
     try:
         run_id = start_pipeline_run(
             pipeline_name=PIPELINE_NAME,
@@ -196,6 +201,7 @@ def run_tracked_silver_job(
             report,
             output_prefix: str,
         ) -> None:
+            nonlocal records_quarantined
             persist_silver_quality_report(
                 pipeline_run_id=run_id,
                 source_system=SOURCE_SYSTEM,
@@ -204,6 +210,22 @@ def run_tracked_silver_job(
                 output_prefix=output_prefix,
             )
 
+            if report.error_count > 0:
+                route_failed_silver_quality_report(
+                    pipeline_run_id=run_id,
+                    source_system=SOURCE_SYSTEM,
+                    bundle=bundle,
+                    report=report,
+                    silver_bucket=silver_bucket,
+                    output_prefix=output_prefix,
+                    psg_bucket=psg_bucket,
+                    psg_object_key=psg_object_key,
+                    hypnogram_bucket=hypnogram_bucket,
+                    hypnogram_object_key=(
+                        hypnogram_object_key
+                    ),
+                )
+                records_quarantined = 1
         pipeline_result = run_silver_pipeline(
             psg_bucket=psg_bucket,
             psg_object_key=psg_object_key,
@@ -232,6 +254,13 @@ def run_tracked_silver_job(
             client=client,
         )
 
+        resolve_silver_quality_quarantine(
+            source_system=SOURCE_SYSTEM,
+            silver_bucket=silver_bucket,
+            output_prefix=(
+                pipeline_result.output_prefix
+            ),
+        )
         stop_heartbeat_safely(
             heartbeat=heartbeat,
             run_id=run_id,
@@ -353,7 +382,9 @@ def run_tracked_silver_job(
                     rows_read=0,
                     rows_written=0,
                     files_processed=0,
-                    records_quarantined=0,
+                    records_quarantined=(
+                        records_quarantined
+                    ),
                 )
 
             except Exception as status_error:
