@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: int_recording_stage_metrics
+    description: >
+      Reusable recording-by-analytical-stage aggregation from the trusted
+      Warehouse epoch fact. The model emits a complete seven-stage grid per
+      recording, including zero rows for stages that are absent. N4 is grouped
+      into analytical N3 through dim_sleep_stage.
+    columns:
+      - name: recording_sk
+        description: Warehouse recording key.
+      - name: subject_sk
+        description: Warehouse subject key inherited from the recording.
+      - name: analytical_stage_code
+        description: Analytical stage code after the controlled N4-to-N3 mapping.
+      - name: epoch_count
+        description: Number of emitted 30-second epochs in this analytical stage.
+      - name: duration_seconds
+        description: Total emitted epoch duration for this stage.
+      - name: duration_minutes
+        description: Total emitted epoch duration in minutes.
+
+  - name: int_recording_sleep_metrics
+    description: >
+      Reusable one-row-per-recording analytical metric surface. It derives
+      descriptive sleep architecture, annotation coverage, unannotated
+      head/tail duration, and transitions without introducing scientific
+      exclusion thresholds or calling scored-time sleep percentage clinical
+      sleep efficiency.
+    columns:
+      - name: recording_sk
+        description: Warehouse recording key.
+      - name: subject_sk
+        description: Warehouse subject key.
+      - name: recording_key
+        description: Logical source recording key.
+      - name: annotated_seconds
+        description: Duration represented by emitted annotation-derived epochs.
+      - name: scored_seconds
+        description: Duration in W, N1, N2, N3, or REM.
+      - name: sleep_seconds
+        description: Duration in N1, N2, N3, or REM.
+      - name: annotation_coverage_pct
+        description: Annotated epoch duration divided by PSG duration.
+      - name: sleep_pct_of_scored_time
+        description: Sleep duration divided by scored W-plus-sleep duration.
+      - name: analytical_stage_transition_count
+        description: >
+          Count of adjacent analytical-stage changes. Source N3-to-N4 changes do
+          not count because both map to analytical N3.
