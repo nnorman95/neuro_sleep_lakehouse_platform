@@ -1,0 +1,131 @@
+version: "v2"
+
+contract_name: "quality_quarantine_records_contract"
+
+table:
+  schema: "quality"
+  name: "quarantine_records"
+  layer: "quality"
+
+owner_role: "data_engineer"
+
+description: "Quality quarantine table for rejected or suspicious records. Silver quality-gate incidents are idempotent per concrete Silver representation while active."
+
+columns:
+  - name: "quarantine_id"
+    type: "uuid"
+    nullable: false
+    description: "Primary key for one quarantine incident."
+
+  - name: "source_system"
+    type: "text"
+    nullable: false
+    description: "External source system or dataset."
+
+  - name: "source_file_id"
+    type: "uuid"
+    nullable: true
+    description: "Optional reference to raw.file_registry.file_id."
+
+  - name: "record_key"
+    type: "text"
+    nullable: true
+    description: "Source-level or trace identifier. Silver quality routing uses silver_bucket/silver_output_prefix for one concrete representation."
+
+  - name: "raw_payload"
+    type: "jsonb"
+    nullable: true
+    description: "Small rejected payload fragment or structured diagnostic metadata."
+
+  - name: "payload_bucket"
+    type: "text"
+    nullable: true
+    description: "Object-storage bucket for a large external quarantine payload."
+
+  - name: "payload_object_key"
+    type: "text"
+    nullable: true
+    description: "Object-storage key for a large external quarantine payload."
+
+  - name: "payload_size_bytes"
+    type: "bigint"
+    nullable: true
+    description: "Size of an external quarantine payload."
+
+  - name: "payload_checksum_sha256"
+    type: "text"
+    nullable: true
+    description: "SHA-256 of an external quarantine payload."
+
+  - name: "error_code"
+    type: "text"
+    nullable: false
+    description: "Machine-readable incident code."
+
+  - name: "error_message"
+    type: "text"
+    nullable: false
+    description: "Human-readable explanation."
+
+  - name: "severity"
+    type: "text"
+    nullable: false
+    description: "Incident severity."
+
+  - name: "detected_at"
+    type: "timestamptz"
+    nullable: false
+    description: "Most recent detection time for the active incident."
+
+  - name: "pipeline_run_id"
+    type: "uuid"
+    nullable: true
+    description: "Most recent ops.pipeline_run that detected the active incident."
+
+  - name: "status"
+    type: "text"
+    nullable: false
+    description: "Review lifecycle status."
+
+  - name: "created_at"
+    type: "timestamptz"
+    nullable: false
+    description: "First creation time for the quarantine incident."
+
+constraints:
+  primary_key:
+    - "quarantine_id"
+
+  checks:
+    - "severity in ('info', 'warning', 'error', 'critical')"
+    - "status in ('open', 'reviewed', 'resolved', 'ignored')"
+    - "payload_size_bytes is null or payload_size_bytes >= 0"
+
+  active_identity:
+    columns:
+      - "source_system"
+      - "record_key"
+      - "error_code"
+    applies_when: "status in ('open', 'reviewed')"
+    description: "At most one active incident exists for one concrete trace identity and error class."
+
+relationships:
+  - column: "source_file_id"
+    references:
+      schema: "raw"
+      table: "file_registry"
+      column: "file_id"
+
+  - column: "pipeline_run_id"
+    references:
+      schema: "ops"
+      table: "pipeline_run"
+      column: "run_id"
+
+data_sensitivity:
+  contains_personal_data: false
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "redact"

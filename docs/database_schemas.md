@@ -133,6 +133,8 @@ payload_size_bytes
 payload_checksum_sha256
 ```
 
+Silver quality-gate quarantine uses `silver_bucket/silver_output_prefix` as the concrete representation trace key. A partial unique index allows at most one active (`open` or `reviewed`) incident for `source_system + record_key + error_code`. Repeated failures refresh that incident; a later successful written or skipped Silver run resolves it.
+
 ### `quality.quality_check_results`
 
 Grain: one durable quality-check result for one pipeline run and dataset scope.

@@ -44,7 +44,7 @@ governance.column_classification
 
 `ops.pipeline_run` and `ops.file_attempt` provide run-level and file-level execution history.
 
-`quality.quarantine_records` stores rejected-record metadata and optional pointers to large payloads in MinIO.
+`quality.quarantine_records` stores rejected-record metadata and optional pointers to large payloads in MinIO. Silver quality-gate failures use the concrete Silver output location as their stable trace identity, refresh one active incident across repeated failures, and resolve that incident after a successful written or skipped rerun.
 
 `quality.quality_check_results` stores durable quality-check history for Bronze, Silver, PostgreSQL, and later analytical layers.
 
