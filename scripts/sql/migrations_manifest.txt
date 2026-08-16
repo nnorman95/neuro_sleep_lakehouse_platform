@@ -57,3 +57,13 @@ scripts/sql/seeds/040_seed_column_classification_warehouse_core.sql
 # Silver quarantine routing hardening
 scripts/sql/migrations/041_add_quality_quarantine_active_identity.sql
 scripts/sql/seeds/042_seed_data_contract_registry_quality_quarantine_records_v2.sql
+
+# Kafka device event durable inbox
+scripts/sql/migrations/043_create_ops_kafka_device_event_inbox.sql
+
+# Kafka device event arrival classification
+scripts/sql/migrations/044_add_kafka_device_event_arrival_classification.sql
+
+# Kafka Warehouse fact governance
+scripts/sql/seeds/045_seed_data_contract_registry_warehouse_fact_device_event.sql
+scripts/sql/seeds/046_seed_column_classification_warehouse_fact_device_event.sql

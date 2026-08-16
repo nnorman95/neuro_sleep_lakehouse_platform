@@ -23,6 +23,9 @@ MinIO console port 9001
 PostgreSQL host port 5433
 Airflow 3.3.1 (custom local execution image)
 Airflow API/UI port 8080
+Kafka 4.3.1 / KRaft
+Kafka host port 9092
+confluent-kafka 2.15.0
 ```
 
 ## 2. Project Location
@@ -83,6 +86,31 @@ Initialize them with:
 ```bash
 make buckets
 ```
+
+### Kafka runtime
+
+Kafka is deliberately separate from the base `make up` command.
+
+```bash
+make kafka-up
+make kafka-init
+make kafka-topic-check
+```
+
+The local host bootstrap is:
+
+```text
+localhost:9092
+```
+
+The Docker-network listener is:
+
+```text
+kafka:19092
+```
+
+Automatic topic creation is disabled. The application topic is created and
+validated from its version-controlled topic contract.
 
 ## 5. Database Initialization
 
@@ -205,6 +233,7 @@ Complete milestone regressions:
 make phase8-check
 make phase9-check
 make phase10-check
+make phase11-check
 ```
 
 `phase9-check` runs the normal smoke suites, full Spark feature validation,
@@ -214,6 +243,30 @@ validation, and a full dbt build.
 `phase10-check` runs the complete Phase 9 regression and then validates the
 Python dependency contract, Airflow execution image, Compose runtime connectivity,
 Airflow foundation smoke DAG, and the main eight-task pipeline DAG contract.
+### Phase 11 Kafka validation
+
+Focused streaming checks:
+
+```bash
+make kafka-smoke
+make kafka-topic-check
+make kafka-producer-check
+make kafka-consumer-check
+make kafka-inbox-check
+make kafka-ingestion-check
+make kafka-invalid-check
+make kafka-arrival-check
+make kafka-warehouse-check
+```
+
+Complete Phase 11 audit:
+
+```bash
+make phase11-check
+```
+
+See [`kafka_device_events.md`](kafka_device_events.md).
+
 ## 10. Run Extract
 
 Example one-recording Extract:
@@ -336,11 +389,12 @@ join semantics, lineage, and publication behavior.
 
 ```bash
 make airflow-down
+make kafka-down
 make down
 ```
 
-Stop Airflow first when both Airflow and the base PostgreSQL/MinIO stack are
-running.
+Stop Airflow first when Airflow is running, then stop Kafka if it was started,
+then stop the base PostgreSQL/MinIO stack.
 
 ## 14. Git Safety
 

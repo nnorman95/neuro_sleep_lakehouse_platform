@@ -1,0 +1,71 @@
+version: "v1"
+contract_name: "warehouse_fact_device_event_contract"
+table:
+  schema: "warehouse"
+  name: "fact_device_event"
+  layer: "warehouse"
+owner_role: "data_engineer"
+description: >
+  Warehouse fact built from validated durable simulated BCI Kafka device
+  events.
+grain: "One validated source device event_id."
+columns:
+  - {name: "device_event_sk", type: "text", nullable: false}
+  - {name: "event_id", type: "uuid", nullable: false}
+  - {name: "source_system", type: "text", nullable: false}
+  - {name: "schema_version", type: "text", nullable: false}
+  - {name: "device_id", type: "text", nullable: false}
+  - {name: "session_id", type: "uuid", nullable: false}
+  - {name: "event_type", type: "text", nullable: false}
+  - {name: "event_time", type: "timestamptz", nullable: false}
+  - {name: "sequence_number", type: "bigint", nullable: false}
+  - {name: "payload", type: "jsonb", nullable: false}
+  - {name: "event_fingerprint_sha256", type: "text", nullable: false}
+  - {name: "arrival_classification_version", type: "text", nullable: true}
+  - {name: "ingestion_delay_ms", type: "bigint", nullable: true}
+  - {name: "late_threshold_ms", type: "bigint", nullable: true}
+  - {name: "is_late", type: "boolean", nullable: true}
+  - {name: "is_out_of_order", type: "boolean", nullable: true}
+  - {name: "out_of_order_reason", type: "text", nullable: true}
+  - {name: "first_ingested_at", type: "timestamptz", nullable: false}
+  - {name: "last_ingested_at", type: "timestamptz", nullable: false}
+  - {name: "delivery_count", type: "integer", nullable: false}
+  - {name: "kafka_topic", type: "text", nullable: false}
+  - {name: "first_kafka_partition", type: "integer", nullable: false}
+  - {name: "first_kafka_offset", type: "bigint", nullable: false}
+  - {name: "last_kafka_partition", type: "integer", nullable: false}
+  - {name: "last_kafka_offset", type: "bigint", nullable: false}
+  - {name: "inbox_created_at", type: "timestamptz", nullable: false}
+  - {name: "inbox_updated_at", type: "timestamptz", nullable: false}
+constraints:
+  primary_key: ["device_event_sk"]
+  unique:
+    - ["event_id"]
+  checks:
+    - "source_system = 'simulated_bci_device'"
+    - "sequence_number >= 0"
+    - "delivery_count > 0"
+relationships:
+  - column: "event_id"
+    references: {schema: "ops", table: "kafka_device_event_inbox", column: "event_id"}
+lineage:
+  - "event_id"
+  - "event_fingerprint_sha256"
+  - "kafka_topic"
+  - "first_kafka_partition"
+  - "first_kafka_offset"
+  - "last_kafka_partition"
+  - "last_kafka_offset"
+  - "inbox_created_at"
+  - "inbox_updated_at"
+compatibility:
+  initial_physical_contract: >
+    dbt model warehouse.fact_device_event sourced from the durable validated
+    ops.kafka_device_event_inbox.
+data_sensitivity:
+  contains_personal_data: true
+  contains_health_data: true
+  contains_direct_identifier: false
+  classification_level: "confidential"
+  access_policy: "restricted"
+  masking_policy: "none"

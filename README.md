@@ -10,6 +10,9 @@ Phase 8 is complete and released as `v0.5.0-features`. Phase 9 adds
 subject, recording, channel, and optional sleep-stage context without
 recomputing sample-level signals. Phase 10 adds **Airflow orchestration** around
 the existing project entrypoints without moving data-processing logic into DAGs.
+Phase 11 adds a **Kafka device-event stream** with contract validation, durable
+PostgreSQL ingestion, event-id deduplication, restart-safe offset handling,
+invalid-message quarantine, arrival classification, and a dbt Warehouse fact.
 
 ## Current state
 
@@ -26,6 +29,8 @@ Full-signal subset:             5 recordings / 116,242,840 Silver signal rows
 Gold signal features:           5 recordings / 83,909 rows / 5 Parquet files
 Integrated Gold features:       5 recordings / 83,909 rows / 83,384 labeled / 525 unlabeled
 Orchestration:                  Airflow 3.3.1 / LocalExecutor / 8-task pipeline DAG
+Streaming:                      Kafka 4.3.1 / KRaft / 3-partition device-event topic
+Streaming sink:                 ops.kafka_device_event_inbox -> warehouse.fact_device_event
 ```
 
 The analytical cohort is larger than the full-signal subset on purpose. Phase 7
@@ -250,6 +255,40 @@ The second run reused existing idempotent outputs instead of duplicating them.
 More detail is in
 [`docs/airflow_orchestration.md`](docs/airflow_orchestration.md).
 
+### Phase 11 Kafka device events
+
+Phase 11 adds a second source path without changing the existing Sleep-EDF
+batch/lakehouse flow:
+
+```text
+simulated BCI events
+        |
+        v
+Kafka
+        |
+        v
+validated consumer
+   +----+-------------------+
+   |                        |
+   v                        v
+invalid                  valid
+quality.quarantine_      ops.kafka_device_event_inbox
+records                     |
+                             v
+                     event_id deduplication
+                     late/out-of-order flags
+                             |
+                             v
+                     dbt warehouse.fact_device_event
+```
+
+Kafka offsets are committed only after a durable database outcome. The consumer
+therefore implements at-least-once processing with idempotent database effects;
+the project does not claim distributed exactly-once semantics.
+
+More detail is in
+[`docs/kafka_device_events.md`](docs/kafka_device_events.md).
+
 ## Validation
 
 Current verified regression status:
@@ -259,8 +298,8 @@ Core smoke tests:                         15/15
 Reliability smoke tests:                  17/17
 Silver smoke tests:                       26/26
 Python smoke total:                       58/58
-dbt project:                              14 models / 249 data tests
-Full dbt build:                           257/257 PASS, 0 WARN, 0 ERROR
+dbt project:                              15 models / 292 data tests
+Full dbt build:                           301/301 PASS, 0 WARN, 0 ERROR
 Spark selected-input reconciliation:      116,242,840/116,242,840 rows
 Spark feature validation:                 83,909 rows / 5 partial rows
 Gold publication validation:              5/5 recordings / 83,909 rows
@@ -275,7 +314,8 @@ Airflow Compose/runtime connectivity:      PASS
 Airflow foundation smoke:                  PASS
 Pipeline DAG contract:                     8/8 tasks
 Full Airflow DAG runs:                      2/2 success
-Phase 10 regression:                       PASS
+Phase 10 regression after Phase 11:        PASS
+Phase 11 Kafka audit:                     PASS
 ```
 
 The Phase 7 relational baseline also confirms:
@@ -327,6 +367,17 @@ make integrated-gold-reliability-smoke
 make phase8-check
 make phase9-check
 make phase10-check
+make kafka-up
+make kafka-init
+make kafka-topic-check
+make kafka-producer-check
+make kafka-consumer-check
+make kafka-inbox-check
+make kafka-ingestion-check
+make kafka-invalid-check
+make kafka-arrival-check
+make kafka-warehouse-check
+make phase11-check
 make airflow-bootstrap
 make airflow-up
 make airflow-down
@@ -360,9 +411,12 @@ v0.5.0-features
 ```
 
 Phase 9 extends the released feature layer with Warehouse-aware integrated Gold
-data while preserving the reusable Phase 8 signal-feature dataset. Phase 10 is
-the current orchestration milestone; it adds a reproducible Airflow runtime and a
-thin end-to-end DAG. No Phase 10 release tag has been created yet.
+data while preserving the reusable Phase 8 signal-feature dataset. Phase 10 adds
+a reproducible Airflow runtime and a thin end-to-end DAG. Phase 11 is the current
+streaming milestone: it adds a local Kafka/KRaft device-event path, durable
+restart-safe consumption, quarantine handling, arrival classification, and
+`warehouse.fact_device_event`. No Phase 10 or Phase 11 release tag has been
+created yet.
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md)
@@ -371,6 +425,7 @@ thin end-to-end DAG. No Phase 10 release tag has been created yet.
 - [`docs/spark_signal_features.md`](docs/spark_signal_features.md)
 - [`docs/feature_integration.md`](docs/feature_integration.md)
 - [`docs/airflow_orchestration.md`](docs/airflow_orchestration.md)
+- [`docs/kafka_device_events.md`](docs/kafka_device_events.md)
 - [`docs/process_optimization.md`](docs/process_optimization.md)
 - [`docs/data_model.md`](docs/data_model.md)
 - [`docs/database_schemas.md`](docs/database_schemas.md)

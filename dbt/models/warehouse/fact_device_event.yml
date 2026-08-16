@@ -1,0 +1,228 @@
+version: 2
+
+models:
+  - name: fact_device_event
+    description: >
+      Warehouse fact for validated simulated BCI device events accepted by the
+      durable Kafka inbox. Grain is one source event_id. Kafka delivery
+      metadata and arrival-quality classifications are retained for lineage
+      and streaming analysis.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+    columns:
+      - name: device_event_sk
+        description: Stable deterministic Warehouse fact identity.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests: [not_null, unique]
+
+      - name: event_id
+        description: Stable source event identity and business deduplication key.
+        data_type: uuid
+        constraints:
+          - type: not_null
+          - type: unique
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: source('ops', 'kafka_device_event_inbox')
+                field: event_id
+
+      - name: source_system
+        description: Source-system identifier.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "source_system = 'simulated_bci_device'"
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [simulated_bci_device]
+
+      - name: schema_version
+        description: Device-event source contract version.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: device_id
+        description: Pseudonymous simulated device identifier.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: session_id
+        description: Simulated device session identifier.
+        data_type: uuid
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: event_type
+        description: Device-event type.
+        data_type: text
+        constraints:
+          - type: not_null
+          - type: check
+            expression: >
+              event_type in
+              ('session_started', 'signal_quality', 'battery_status', 'session_ended')
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - session_started
+                  - signal_quality
+                  - battery_status
+                  - session_ended
+
+      - name: event_time
+        description: UTC source event timestamp.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: sequence_number
+        description: Source sequence number within a device session.
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "sequence_number >= 0"
+        data_tests: [not_null]
+
+      - name: payload
+        description: Event-type-specific validated source payload.
+        data_type: jsonb
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: event_fingerprint_sha256
+        description: Canonical SHA-256 identity fingerprint of the source event.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: arrival_classification_version
+        description: Version of the late/out-of-order classification policy.
+        data_type: text
+
+      - name: ingestion_delay_ms
+        description: Signed consumer ingestion delay relative to source event_time.
+        data_type: bigint
+
+      - name: late_threshold_ms
+        description: Late-event threshold recorded when classification was made.
+        data_type: bigint
+
+      - name: is_late
+        description: Whether the event exceeded the recorded late threshold.
+        data_type: boolean
+
+      - name: is_out_of_order
+        description: Whether first arrival regressed within its device session.
+        data_type: boolean
+
+      - name: out_of_order_reason
+        description: Sequence/event-time reason for out-of-order classification.
+        data_type: text
+        constraints:
+          - type: check
+            expression: >
+              out_of_order_reason is null
+              or out_of_order_reason in
+              ('sequence', 'event_time', 'sequence_and_event_time')
+
+      - name: first_ingested_at
+        description: First durable consumer-ingestion timestamp.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: last_ingested_at
+        description: Most recent durable delivery timestamp for the event_id.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: delivery_count
+        description: Number of durable deliveries observed for the event_id.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "delivery_count > 0"
+        data_tests: [not_null]
+
+      - name: kafka_topic
+        description: Kafka source topic.
+        data_type: text
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: first_kafka_partition
+        description: Kafka partition of the first durable delivery.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "first_kafka_partition >= 0"
+        data_tests: [not_null]
+
+      - name: first_kafka_offset
+        description: Kafka offset of the first durable delivery.
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "first_kafka_offset >= 0"
+        data_tests: [not_null]
+
+      - name: last_kafka_partition
+        description: Kafka partition of the most recent durable delivery.
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "last_kafka_partition >= 0"
+        data_tests: [not_null]
+
+      - name: last_kafka_offset
+        description: Kafka offset of the most recent durable delivery.
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: check
+            expression: "last_kafka_offset >= 0"
+        data_tests: [not_null]
+
+      - name: inbox_created_at
+        description: Durable inbox row creation timestamp retained as lineage.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+
+      - name: inbox_updated_at
+        description: Durable inbox row last-update timestamp retained as lineage.
+        data_type: timestamptz
+        constraints:
+          - type: not_null
+        data_tests: [not_null]

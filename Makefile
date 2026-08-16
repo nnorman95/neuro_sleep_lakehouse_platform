@@ -1,5 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
-
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -24,6 +23,23 @@ help:
 	@echo "make phase8-check         Run complete Phase 8 regression"
 	@echo "make phase9-check         Run complete Phase 9 regression"
 	@echo "make phase10-check        Run complete Phase 10 regression"
+	@echo "make kafka-up             Start local Kafka broker"
+	@echo "make kafka-down           Stop local Kafka broker"
+	@echo "make kafka-ps             Show Kafka broker status"
+	@echo "make kafka-init           Create or validate application topics"
+	@echo "make kafka-topic-check    Validate topic lifecycle and idempotency"
+	@echo "make kafka-produce        Produce a simulated BCI event batch"
+	@echo "make kafka-producer-check Validate Kafka producer delivery"
+	@echo "make kafka-consume        Read and validate device events"
+	@echo "make kafka-consumer-check Validate Kafka consumer foundation"
+	@echo "make kafka-inbox-check    Validate durable event inbox and dedup"
+	@echo "make kafka-ingest         Persist events then commit Kafka offsets"
+	@echo "make kafka-ingestion-check Validate durable ingestion and restart safety"
+	@echo "make kafka-invalid-check  Validate invalid-message quarantine flow"
+	@echo "make kafka-arrival-check  Validate late and out-of-order event classification"
+	@echo "make kafka-warehouse-check Validate warehouse.fact_device_event"
+	@echo "make phase11-check        Run complete Phase 11 Kafka audit"
+	@echo "make kafka-smoke          Validate Kafka runtime"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
 	@echo "make airflow-down         Stop Airflow services only"
@@ -34,7 +50,6 @@ help:
 	@echo "make source-check       Check Sleep-EDF source configuration"
 	@echo "make psql               Open PostgreSQL psql shell"
 	@echo "make clean-pycache      Remove Python cache folders"
-
 up:
 	docker compose up -d postgres minio
 
@@ -67,7 +82,6 @@ spark-smoke:
 
 spark-feature-check:
 	./scripts/run_signal_feature_validation.sh
-
 gold-signal-features:
 	./scripts/run_gold_signal_features.sh
 
@@ -85,7 +99,6 @@ integrated-signal-features:
 
 integrated-signal-features-check:
 	./scripts/validate_integrated_signal_features.sh
-
 integrated-gold-reliability-smoke:
 	./scripts/run_integrated_gold_reliability_smoke_tests.sh
 
@@ -105,9 +118,59 @@ source-check:
 
 psql:
 	docker compose exec postgres psql -P pager=off -U neuro_sleep -d neuro_sleep
-
 clean-pycache:
 	find src -type d -name "__pycache__" -prune -exec rm -rf {} +
+
+kafka-up:
+	docker compose up -d kafka
+
+kafka-down:
+	docker compose stop kafka
+
+kafka-ps:
+	docker compose ps kafka
+
+kafka-init:
+	python scripts/init_kafka_topics.py
+
+kafka-topic-check:
+	./scripts/validate_kafka_topics.sh
+
+kafka-produce: kafka-init
+	PYTHONPATH=src python scripts/produce_simulated_bci_events.py
+
+kafka-producer-check:
+	./scripts/validate_kafka_producer.sh
+
+kafka-consume: kafka-init
+	PYTHONPATH=src python scripts/consume_simulated_bci_events.py
+
+kafka-consumer-check:
+	./scripts/validate_kafka_consumer.sh
+
+kafka-inbox-check:
+	./scripts/validate_kafka_device_event_inbox.sh
+
+kafka-ingest: kafka-init
+	PYTHONPATH=src python scripts/ingest_kafka_device_events.py
+
+kafka-ingestion-check:
+	./scripts/validate_kafka_durable_ingestion.sh
+
+kafka-invalid-check:
+	./scripts/validate_kafka_invalid_message_quarantine.sh
+
+kafka-arrival-check:
+	./scripts/validate_kafka_arrival_classification.sh
+
+kafka-warehouse-check:
+	./scripts/validate_kafka_warehouse_fact.sh
+
+phase11-check:
+	./scripts/validate_phase11_kafka_device_events.sh
+
+kafka-smoke:
+	./scripts/validate_kafka_runtime.sh
 
 airflow-bootstrap:
 	./scripts/bootstrap_airflow_local.sh
