@@ -388,6 +388,171 @@ class KafkaDeviceEventConsumer:
 
         return consumed
 
+    def _commit_processed_event(
+        self,
+        consumed: ConsumedDeviceEvent,
+    ) -> None:
+        committed = self._consumer.commit(
+            offsets=[
+                TopicPartition(
+                    consumed.topic,
+                    consumed.partition,
+                    consumed.offset + 1,
+                )
+            ],
+            asynchronous=False,
+        )
+
+        if committed is None or len(committed) != 1:
+            raise RuntimeError(
+                "Kafka synchronous offset commit "
+                "returned an unexpected result"
+            )
+
+        committed_partition = committed[0]
+
+        if committed_partition.error is not None:
+            raise KafkaException(
+                committed_partition.error
+            )
+
+        expected_offset = consumed.offset + 1
+
+        if (
+            committed_partition.offset
+            != expected_offset
+        ):
+            raise RuntimeError(
+                "Kafka committed an unexpected offset: "
+                f"expected={expected_offset}, "
+                f"actual={committed_partition.offset}"
+            )
+
+    def _process_polled_events(
+        self,
+        *,
+        processor,
+        max_messages: int,
+        timeout_seconds: float,
+    ) -> list[ConsumedDeviceEvent]:
+        if max_messages <= 0:
+            raise ValueError(
+                "max_messages must be positive"
+            )
+
+        if timeout_seconds <= 0:
+            raise ValueError(
+                "timeout_seconds must be positive"
+            )
+
+        processed: list[ConsumedDeviceEvent] = []
+        deadline = time.monotonic() + timeout_seconds
+
+        while len(processed) < max_messages:
+            remaining = deadline - time.monotonic()
+
+            if remaining <= 0:
+                break
+
+            message = self._consumer.poll(
+                min(1.0, remaining)
+            )
+
+            if message is None:
+                continue
+
+            consumed = decode_device_event_message(
+                message,
+                expected_topic=self._topic,
+            )
+
+            # Durable side effect must succeed before
+            # this message's Kafka offset can move.
+            processor(consumed)
+
+            self._commit_processed_event(
+                consumed
+            )
+
+            processed.append(consumed)
+
+        if len(processed) != max_messages:
+            raise RuntimeError(
+                "Kafka durable ingestion timed out "
+                "before processing the requested messages: "
+                f"expected={max_messages}, "
+                f"actual={len(processed)}"
+            )
+
+        return processed
+
+    def process_events_from_offsets(
+        self,
+        *,
+        start_offsets: dict[int, int],
+        processor,
+        max_messages: int,
+        timeout_seconds: float,
+    ) -> list[ConsumedDeviceEvent]:
+        if not start_offsets:
+            raise ValueError(
+                "start_offsets cannot be empty"
+            )
+
+        assignments = []
+
+        for partition, offset in sorted(
+            start_offsets.items()
+        ):
+            if partition < 0:
+                raise ValueError(
+                    "Kafka partition cannot be negative"
+                )
+
+            if offset < 0:
+                raise ValueError(
+                    "Kafka start offset cannot be negative"
+                )
+
+            assignments.append(
+                TopicPartition(
+                    self._topic.topic_name,
+                    partition,
+                    offset,
+                )
+            )
+
+        self._consumer.assign(assignments)
+
+        try:
+            return self._process_polled_events(
+                processor=processor,
+                max_messages=max_messages,
+                timeout_seconds=timeout_seconds,
+            )
+        finally:
+            self._consumer.close()
+
+    def process_events(
+        self,
+        *,
+        processor,
+        max_messages: int,
+        timeout_seconds: float,
+    ) -> list[ConsumedDeviceEvent]:
+        self._consumer.subscribe(
+            [self._topic.topic_name]
+        )
+
+        try:
+            return self._process_polled_events(
+                processor=processor,
+                max_messages=max_messages,
+                timeout_seconds=timeout_seconds,
+            )
+        finally:
+            self._consumer.close()
+
     def consume_events_from_offsets(
         self,
         *,
