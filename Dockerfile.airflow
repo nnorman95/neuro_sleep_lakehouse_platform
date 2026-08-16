@@ -1,0 +1,25 @@
+# check=error=true
+ARG AIRFLOW_IMAGE=apache/airflow@sha256:0c4bcc0370e526de1b7892a3bf4343d260c6c82359c66f77155b53cd773d6339
+FROM ${AIRFLOW_IMAGE}
+
+USER root
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jre-headless \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+COPY --chown=airflow:root requirements.txt /tmp/neurosleep-requirements.txt
+
+RUN pip install --no-cache-dir \
+    "apache-airflow==${AIRFLOW_VERSION}" \
+    -r /tmp/neurosleep-requirements.txt
+
+ENV NEUROSLEEP_HOME=/opt/neurosleep
+ENV PYTHONPATH=/opt/neurosleep/src
+
+WORKDIR /opt/neurosleep
+
+COPY --chown=airflow:root . /opt/neurosleep
