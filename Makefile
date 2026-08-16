@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check test source-check psql clean-pycache
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check test source-check psql clean-pycache airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
 
 help:
 	@echo "NeuroSleep local commands"
@@ -23,6 +23,12 @@ help:
 	@echo "make integrated-gold-reliability-smoke Test integrated Gold recovery and fail-closed behavior"
 	@echo "make phase8-check         Run complete Phase 8 regression"
 	@echo "make phase9-check         Run complete Phase 9 regression"
+	@echo "make airflow-bootstrap    Initialize and start local Airflow"
+	@echo "make airflow-up           Start initialized Airflow services"
+	@echo "make airflow-down         Stop Airflow services only"
+	@echo "make airflow-ps           Show Airflow service status"
+	@echo "make airflow-smoke        Run Airflow foundation smoke checks"
+	@echo "make airflow-password     Show local Airflow admin password"
 	@echo "make test               Run all test suites"
 	@echo "make source-check       Check Sleep-EDF source configuration"
 	@echo "make psql               Open PostgreSQL psql shell"
@@ -98,3 +104,21 @@ psql:
 
 clean-pycache:
 	find src -type d -name "__pycache__" -prune -exec rm -rf {} +
+
+airflow-bootstrap:
+	./scripts/bootstrap_airflow_local.sh
+
+airflow-up:
+	./scripts/airflow_compose.sh up -d --no-deps airflow-scheduler airflow-dag-processor airflow-api-server
+
+airflow-down:
+	./scripts/stop_airflow_local.sh
+
+airflow-ps:
+	./scripts/airflow_compose.sh ps
+
+airflow-smoke:
+	./scripts/run_airflow_foundation_smoke.sh
+
+airflow-password:
+	./scripts/show_airflow_password.sh
