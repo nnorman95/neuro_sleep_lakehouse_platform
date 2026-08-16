@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -28,6 +28,8 @@ help:
 	@echo "make kafka-ps             Show Kafka broker status"
 	@echo "make kafka-init           Create or validate application topics"
 	@echo "make kafka-topic-check    Validate topic lifecycle and idempotency"
+	@echo "make kafka-produce        Produce a simulated BCI event batch"
+	@echo "make kafka-producer-check Validate Kafka producer delivery"
 	@echo "make kafka-smoke          Validate Kafka runtime"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
@@ -124,6 +126,12 @@ kafka-init:
 
 kafka-topic-check:
 	./scripts/validate_kafka_topics.sh
+
+kafka-produce: kafka-init
+	PYTHONPATH=src python scripts/produce_simulated_bci_events.py
+
+kafka-producer-check:
+	./scripts/validate_kafka_producer.sh
 
 kafka-smoke:
 	./scripts/validate_kafka_runtime.sh
