@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -35,6 +35,7 @@ help:
 	@echo "make kafka-inbox-check    Validate durable event inbox and dedup"
 	@echo "make kafka-ingest         Persist events then commit Kafka offsets"
 	@echo "make kafka-ingestion-check Validate durable ingestion and restart safety"
+	@echo "make kafka-invalid-check  Validate invalid-message quarantine flow"
 	@echo "make kafka-smoke          Validate Kafka runtime"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
@@ -152,6 +153,9 @@ kafka-ingest: kafka-init
 
 kafka-ingestion-check:
 	./scripts/validate_kafka_durable_ingestion.sh
+
+kafka-invalid-check:
+	./scripts/validate_kafka_invalid_message_quarantine.sh
 
 kafka-smoke:
 	./scripts/validate_kafka_runtime.sh

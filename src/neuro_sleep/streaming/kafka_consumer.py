@@ -21,6 +21,13 @@ from neuro_sleep.streaming.kafka_producer import (
 
 
 @dataclass(frozen=True)
+class KafkaResilientProcessingResult:
+    messages_handled: int
+    valid_events: int
+    quarantined_messages: int
+
+
+@dataclass(frozen=True)
 class ConsumedDeviceEvent:
     event: DeviceEvent
     topic: str
@@ -388,16 +395,19 @@ class KafkaDeviceEventConsumer:
 
         return consumed
 
-    def _commit_processed_event(
+    def _commit_message_offset(
         self,
-        consumed: ConsumedDeviceEvent,
+        *,
+        topic: str,
+        partition: int,
+        offset: int,
     ) -> None:
         committed = self._consumer.commit(
             offsets=[
                 TopicPartition(
-                    consumed.topic,
-                    consumed.partition,
-                    consumed.offset + 1,
+                    topic,
+                    partition,
+                    offset + 1,
                 )
             ],
             asynchronous=False,
@@ -416,7 +426,7 @@ class KafkaDeviceEventConsumer:
                 committed_partition.error
             )
 
-        expected_offset = consumed.offset + 1
+        expected_offset = offset + 1
 
         if (
             committed_partition.offset
@@ -427,6 +437,16 @@ class KafkaDeviceEventConsumer:
                 f"expected={expected_offset}, "
                 f"actual={committed_partition.offset}"
             )
+
+    def _commit_processed_event(
+        self,
+        consumed: ConsumedDeviceEvent,
+    ) -> None:
+        self._commit_message_offset(
+            topic=consumed.topic,
+            partition=consumed.partition,
+            offset=consumed.offset,
+        )
 
     def _process_polled_events(
         self,
@@ -485,6 +505,168 @@ class KafkaDeviceEventConsumer:
             )
 
         return processed
+
+    def _process_polled_events_resilient(
+        self,
+        *,
+        processor,
+        invalid_message_handler,
+        max_messages: int,
+        timeout_seconds: float,
+    ) -> KafkaResilientProcessingResult:
+        if max_messages <= 0:
+            raise ValueError(
+                "max_messages must be positive"
+            )
+
+        if timeout_seconds <= 0:
+            raise ValueError(
+                "timeout_seconds must be positive"
+            )
+
+        messages_handled = 0
+        valid_events = 0
+        quarantined_messages = 0
+        deadline = time.monotonic() + timeout_seconds
+
+        while messages_handled < max_messages:
+            remaining = deadline - time.monotonic()
+
+            if remaining <= 0:
+                break
+
+            message = self._consumer.poll(
+                min(1.0, remaining)
+            )
+
+            if message is None:
+                continue
+
+            if message.error() is not None:
+                raise KafkaException(
+                    message.error()
+                )
+
+            try:
+                consumed = decode_device_event_message(
+                    message,
+                    expected_topic=self._topic,
+                )
+            except (ValueError, TypeError) as exc:
+                # The invalid-message handler must make
+                # quarantine durable before this offset moves.
+                invalid_message_handler(
+                    message,
+                    exc,
+                )
+
+                self._commit_message_offset(
+                    topic=message.topic(),
+                    partition=message.partition(),
+                    offset=message.offset(),
+                )
+
+                quarantined_messages += 1
+                messages_handled += 1
+                continue
+
+            processor(consumed)
+
+            self._commit_processed_event(
+                consumed
+            )
+
+            valid_events += 1
+            messages_handled += 1
+
+        if messages_handled != max_messages:
+            raise RuntimeError(
+                "Kafka resilient ingestion timed out "
+                "before handling the requested messages: "
+                f"expected={max_messages}, "
+                f"actual={messages_handled}"
+            )
+
+        return KafkaResilientProcessingResult(
+            messages_handled=messages_handled,
+            valid_events=valid_events,
+            quarantined_messages=quarantined_messages,
+        )
+
+    def process_events_resilient_from_offsets(
+        self,
+        *,
+        start_offsets: dict[int, int],
+        processor,
+        invalid_message_handler,
+        max_messages: int,
+        timeout_seconds: float,
+    ) -> KafkaResilientProcessingResult:
+        if not start_offsets:
+            raise ValueError(
+                "start_offsets cannot be empty"
+            )
+
+        assignments = []
+
+        for partition, offset in sorted(
+            start_offsets.items()
+        ):
+            if partition < 0:
+                raise ValueError(
+                    "Kafka partition cannot be negative"
+                )
+
+            if offset < 0:
+                raise ValueError(
+                    "Kafka start offset cannot be negative"
+                )
+
+            assignments.append(
+                TopicPartition(
+                    self._topic.topic_name,
+                    partition,
+                    offset,
+                )
+            )
+
+        self._consumer.assign(assignments)
+
+        try:
+            return self._process_polled_events_resilient(
+                processor=processor,
+                invalid_message_handler=(
+                    invalid_message_handler
+                ),
+                max_messages=max_messages,
+                timeout_seconds=timeout_seconds,
+            )
+        finally:
+            self._consumer.close()
+
+    def process_events_resilient(
+        self,
+        *,
+        processor,
+        invalid_message_handler,
+        max_messages: int,
+        timeout_seconds: float,
+    ) -> KafkaResilientProcessingResult:
+        self._consumer.subscribe(
+            [self._topic.topic_name]
+        )
+
+        try:
+            return self._process_polled_events_resilient(
+                processor=processor,
+                invalid_message_handler=(
+                    invalid_message_handler
+                ),
+                max_messages=max_messages,
+                timeout_seconds=timeout_seconds,
+            )
+        finally:
+            self._consumer.close()
 
     def process_events_from_offsets(
         self,
