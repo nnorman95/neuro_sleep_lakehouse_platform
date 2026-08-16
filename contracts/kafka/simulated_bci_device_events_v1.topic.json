@@ -1,0 +1,14 @@
+{
+  "contract_version": "1.0.0",
+  "topic_name": "neurosleep.simulated-bci.device-events.v1",
+  "description": "Validated simulated BCI device events before downstream Silver processing.",
+  "event_schema": "contracts/simulated_bci_device_event_v1.schema.json",
+  "key_field": "device_id",
+  "partitions": 3,
+  "replication_factor": 1,
+  "configs": {
+    "cleanup.policy": "delete",
+    "retention.ms": "604800000",
+    "min.insync.replicas": "1"
+  }
+}

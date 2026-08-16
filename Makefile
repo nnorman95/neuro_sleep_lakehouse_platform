@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -26,6 +26,8 @@ help:
 	@echo "make kafka-up             Start local Kafka broker"
 	@echo "make kafka-down           Stop local Kafka broker"
 	@echo "make kafka-ps             Show Kafka broker status"
+	@echo "make kafka-init           Create or validate application topics"
+	@echo "make kafka-topic-check    Validate topic lifecycle and idempotency"
 	@echo "make kafka-smoke          Validate Kafka runtime"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
@@ -116,6 +118,12 @@ kafka-down:
 
 kafka-ps:
 	docker compose ps kafka
+
+kafka-init:
+	python scripts/init_kafka_topics.py
+
+kafka-topic-check:
+	./scripts/validate_kafka_topics.sh
 
 kafka-smoke:
 	./scripts/validate_kafka_runtime.sh
