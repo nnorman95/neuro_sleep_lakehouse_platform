@@ -5,24 +5,25 @@ PROJECT_ROOT="$(
     cd "$(dirname "${BASH_SOURCE[0]}")/.."
     pwd
 )"
-IMAGE_TAG="${1:-neurosleep-airflow:phase10}"
 
 cd "$PROJECT_ROOT"
 
-resolve_airflow_image() {
-    if [[ -n "${AIRFLOW_IMAGE:-}" ]]; then
-        printf '%s\n' "$AIRFLOW_IMAGE"
+resolve_env_value() {
+    local name="$1"
+    local current_value="${!name:-}"
+    local file value
+
+    if [[ -n "$current_value" ]]; then
+        printf '%s\n' "$current_value"
         return 0
     fi
-
-    local file value
 
     for file in ".env" ".env.example"; do
         [[ -f "$file" ]] || continue
 
         value="$(
-            awk -F= '
-                /^AIRFLOW_IMAGE=/ {
+            awk -F= -v key="$name" '
+                $1 == key {
                     sub(/^[^=]*=/, "")
                     print
                 }
@@ -38,7 +39,9 @@ resolve_airflow_image() {
     return 1
 }
 
-AIRFLOW_BASE_IMAGE="$(resolve_airflow_image || true)"
+AIRFLOW_BASE_IMAGE="$(resolve_env_value AIRFLOW_IMAGE || true)"
+IMAGE_TAG="${1:-$(resolve_env_value AIRFLOW_RUNTIME_IMAGE || true)}"
+IMAGE_TAG="${IMAGE_TAG:-neurosleep-airflow:phase10}"
 
 if [[ -z "$AIRFLOW_BASE_IMAGE" ]]; then
     echo "ERROR: AIRFLOW_IMAGE is not set in the environment, .env, or .env.example." >&2

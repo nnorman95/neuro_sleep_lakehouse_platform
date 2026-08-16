@@ -1,7 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_TAG="${1:-neurosleep-airflow:phase10}"
+PROJECT_ROOT="$(
+    cd "$(dirname "${BASH_SOURCE[0]}")/.."
+    pwd
+)"
+
+cd "$PROJECT_ROOT"
+
+resolve_runtime_image() {
+    local file value
+
+    if [[ -n "${AIRFLOW_RUNTIME_IMAGE:-}" ]]; then
+        printf '%s\n' "$AIRFLOW_RUNTIME_IMAGE"
+        return 0
+    fi
+
+    for file in ".env" ".env.example"; do
+        [[ -f "$file" ]] || continue
+
+        value="$(
+            awk -F= '
+                /^AIRFLOW_RUNTIME_IMAGE=/ {
+                    sub(/^[^=]*=/, "")
+                    print
+                }
+            ' "$file" | tail -n 1
+        )"
+
+        if [[ -n "$value" ]]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
+    done
+
+    printf '%s\n' "neurosleep-airflow:phase10"
+}
+
+IMAGE_TAG="${1:-$(resolve_runtime_image)}"
 
 echo "=== IMAGE ==="
 echo "$IMAGE_TAG"
@@ -24,7 +60,9 @@ test -d /opt/neurosleep
 test -f /opt/neurosleep/pyproject.toml
 test -f /opt/neurosleep/requirements.txt
 test -f /opt/neurosleep/scripts/validate_dependency_contract.py
+test ! -e /opt/neurosleep/.env
 echo "/opt/neurosleep: OK"
+echo "/opt/neurosleep/.env: absent"
 
 echo
 echo "=== AIRFLOW ==="
