@@ -1,0 +1,56 @@
+version: 2
+
+sources:
+  - name: ops
+    description: >
+      Operational PostgreSQL tables used as trusted relational inputs for
+      downstream Warehouse models.
+    database: "{{ env_var('POSTGRES_DB', 'neuro_sleep') }}"
+    schema: ops
+    tables:
+      - name: kafka_device_event_inbox
+        description: >
+          Durable validated Kafka device-event inbox. Grain is one event_id;
+          repeated deliveries update delivery metadata instead of creating a
+          second event row.
+        columns:
+          - name: event_id
+            data_tests: [not_null, unique]
+          - name: source_system
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [simulated_bci_device]
+          - name: schema_version
+            data_tests: [not_null]
+          - name: device_id
+            data_tests: [not_null]
+          - name: session_id
+            data_tests: [not_null]
+          - name: event_type
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values:
+                      - session_started
+                      - signal_quality
+                      - battery_status
+                      - session_ended
+          - name: event_time
+            data_tests: [not_null]
+          - name: sequence_number
+            data_tests: [not_null]
+          - name: raw_event
+            data_tests: [not_null]
+          - name: event_fingerprint_sha256
+            data_tests: [not_null]
+          - name: delivery_count
+            data_tests: [not_null]
+          - name: kafka_topic
+            data_tests: [not_null]
+          - name: first_kafka_partition
+            data_tests: [not_null]
+          - name: first_kafka_offset
+            data_tests: [not_null]
