@@ -1,5 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
-
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -24,6 +23,10 @@ help:
 	@echo "make phase8-check         Run complete Phase 8 regression"
 	@echo "make phase9-check         Run complete Phase 9 regression"
 	@echo "make phase10-check        Run complete Phase 10 regression"
+	@echo "make kafka-up             Start local Kafka broker"
+	@echo "make kafka-down           Stop local Kafka broker"
+	@echo "make kafka-ps             Show Kafka broker status"
+	@echo "make kafka-smoke          Validate Kafka runtime"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
 	@echo "make airflow-down         Stop Airflow services only"
@@ -34,7 +37,6 @@ help:
 	@echo "make source-check       Check Sleep-EDF source configuration"
 	@echo "make psql               Open PostgreSQL psql shell"
 	@echo "make clean-pycache      Remove Python cache folders"
-
 up:
 	docker compose up -d postgres minio
 
@@ -67,7 +69,6 @@ spark-smoke:
 
 spark-feature-check:
 	./scripts/run_signal_feature_validation.sh
-
 gold-signal-features:
 	./scripts/run_gold_signal_features.sh
 
@@ -85,7 +86,6 @@ integrated-signal-features:
 
 integrated-signal-features-check:
 	./scripts/validate_integrated_signal_features.sh
-
 integrated-gold-reliability-smoke:
 	./scripts/run_integrated_gold_reliability_smoke_tests.sh
 
@@ -105,9 +105,20 @@ source-check:
 
 psql:
 	docker compose exec postgres psql -P pager=off -U neuro_sleep -d neuro_sleep
-
 clean-pycache:
 	find src -type d -name "__pycache__" -prune -exec rm -rf {} +
+
+kafka-up:
+	docker compose up -d kafka
+
+kafka-down:
+	docker compose stop kafka
+
+kafka-ps:
+	docker compose ps kafka
+
+kafka-smoke:
+	./scripts/validate_kafka_runtime.sh
 
 airflow-bootstrap:
 	./scripts/bootstrap_airflow_local.sh
