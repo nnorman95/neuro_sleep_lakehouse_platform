@@ -1,10 +1,9 @@
 # Architecture
 
-This document describes the platform as implemented through **Phase 9:
-Feature Integration**. Bronze, Silver, PostgreSQL staging, the Warehouse Core,
-relational marts, and the Phase 8 signal-feature path remain in place. Phase 9
-adds a separate integrated Gold representation combining reusable signal
-features with Warehouse analytical context.
+This document describes the platform as implemented through **Phase 10: Airflow Orchestration**. Bronze, Silver, PostgreSQL staging, the Warehouse Core,
+relational marts, the Phase 8 signal-feature path, and the Phase 9 integrated Gold
+representation remain unchanged. Phase 10 adds a thin Airflow control plane that
+invokes the existing project entrypoints in dependency order.
 
 ## 1. Source
 
@@ -50,7 +49,13 @@ governance  source registry, contracts, and column classifications
 
 ## 3. End-to-end flow
 
+Airflow is the orchestration layer, not a new data-processing layer. It invokes
+the existing commands that implement the flow below.
+
 ```text
+Airflow DAG: neurosleep_lakehouse_pipeline
+  -> existing Bronze / Silver / staging / dbt / Spark entrypoints
+
 PhysioNet
   -> RECORDS + SHA256SUMS.txt
   -> streaming extract
@@ -355,6 +360,7 @@ Silver smoke tests:       26/26
 dbt models:               14
 dbt data tests:           249
 Full dbt build:           257/257 PASS
+Phase 10 regression:       PASS
 ```
 
 Phase 8 has additionally verified:
@@ -412,11 +418,45 @@ Completed exact outputs are skipped. Incomplete prefixes without
 
 See [`feature_integration.md`](feature_integration.md).
 
-## 16. Next architectural scope
+## 16. Phase 10 Airflow orchestration
 
-Still outside Phase 9:
+Phase 10 adds a local Airflow 3.3.1 runtime using a custom project execution
+image. The Airflow services run with container-native PostgreSQL and MinIO
+addresses while the host workflow continues using host ports.
 
-- orchestration with Airflow;
+```text
+host workflow                 Airflow containers
+POSTGRES_HOST=localhost       POSTGRES_HOST=postgres
+POSTGRES_PORT=5433            POSTGRES_PORT=5432
+MINIO_ENDPOINT=localhost:9000 MINIO_ENDPOINT=http://minio:9000
+```
+
+The runtime image contains the project code, Java 17, PySpark 4.2.0, dbt-core
+1.12.0, and dbt-postgres 1.11.0. `.env` is excluded from the image; Compose injects
+runtime configuration instead.
+
+The main DAG has eight tasks and deliberately reuses the existing project
+entrypoints. Independent branches run in parallel where the dependency graph
+allows it, while `parallelism=2` bounds local resource use.
+
+```text
+extract_bronze
+  -> build_subject_metadata_silver -> load_subject_metadata_staging --+
+  -> build_recording_silver -> load_recording_staging ----------------+-> build_warehouse_and_marts --+
+                            -> build_gold_signal_features -------------------------------------------+-> build_integrated_signal_features
+```
+
+The DAG is manual by design (`schedule=None`) at this stage. `catchup=False` and
+`max_active_runs=1` prevent accidental overlapping full-pipeline runs. Two
+consecutive real scheduler-driven runs completed with all eight tasks successful,
+and the Phase 9 regression remained green afterward.
+
+See [`airflow_orchestration.md`](airflow_orchestration.md).
+
+## 17. Next architectural scope
+
+Still outside Phase 10:
+
 - device-event streaming with Kafka;
 - broader quality hardening and operational observability;
 - dashboards and broader BI access;

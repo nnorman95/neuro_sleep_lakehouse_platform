@@ -1,9 +1,9 @@
 # Data Flow
 
 This document follows data from PhysioNet through the relational analytics
-path, the Phase 8 Spark/Gold signal-feature path, and the Phase 9 feature
-integration path. It focuses on what is implemented today and where the project
-deliberately stops.
+path, the Phase 8 Spark/Gold signal-feature path, the Phase 9 feature integration
+path, and the Phase 10 Airflow control flow. It focuses on what is implemented
+today and where the project deliberately stops.
 
 ## 1. Extract and Bronze
 
@@ -315,11 +315,17 @@ Phase 8 adds separate high-volume checks:
 - idempotent full rerun;
 - partial-output recovery and completed-prefix fail-closed smoke tests.
 
-The canonical full Phase 8 regression entrypoint is:
+Canonical milestone regressions are:
 
 ```bash
 make phase8-check
+make phase9-check
+make phase10-check
 ```
+
+`phase10-check` runs the Phase 9 regression first, then validates the dependency
+contract, Airflow execution image, Compose runtime connectivity, Airflow
+foundation behavior, and the eight-task pipeline DAG contract.
 
 ## 12. Scale boundary
 
@@ -401,3 +407,46 @@ The integrated publication records validated source-Gold lineage and a
 deterministic Warehouse-context SHA-256. This separates reusable signal
 computation from relational context integration and avoids re-reading
 sample-level Silver data during Phase 9.
+
+## 15. Phase 10 orchestration control flow
+
+Phase 10 does not introduce a second implementation of the pipeline. Airflow
+calls the same commands used by the manual workflow and only owns dependency
+ordering, retries, bounded parallelism, and run/task state.
+
+```text
+extract_bronze
+      |
+      +----------------------+
+      v                      v
+build_subject_metadata_    build_recording_silver
+silver                      |
+      |                     +--------------------+
+      v                     v                    v
+load_subject_metadata_   load_recording_      build_gold_signal_
+staging                  staging              features
+      |                     |                    |
+      +----------+----------+                    |
+                 v                               |
+       build_warehouse_and_marts                 |
+                 |                               |
+                 +---------------+---------------+
+                                 v
+                 build_integrated_signal_features
+```
+
+The branch after Bronze is intentional: subject metadata and recording Silver can
+proceed independently. After recording Silver, relational staging and Gold signal
+features can also proceed independently. Integrated Gold waits for both the dbt
+Warehouse/marts path and the Gold feature path.
+
+The DAG policy is manual execution (`schedule=None`), `catchup=False`,
+`max_active_runs=1`, and one retry per task. The local Airflow runtime uses
+`LocalExecutor` with parallelism two.
+
+Two consecutive full DAG runs completed with all eight tasks successful. The
+second run exercised the existing idempotent/skip behavior, and the full Phase 9
+regression passed afterward, confirming that orchestration did not change data
+grain or duplicate the existing publications.
+
+See [`airflow_orchestration.md`](airflow_orchestration.md).

@@ -21,6 +21,8 @@ PostgreSQL 18.4
 MinIO API port 9000
 MinIO console port 9001
 PostgreSQL host port 5433
+Airflow 3.3.1 (custom local execution image)
+Airflow API/UI port 8080
 ```
 
 ## 2. Project Location
@@ -113,7 +115,48 @@ make bootstrap
 Bootstrap starts PostgreSQL and MinIO, initializes buckets, runs SQL migrations
 and seeds, and runs the core smoke suite.
 
-## 7. Source Configuration
+## 7. Airflow Runtime and Bootstrap
+
+Airflow runs in separate containers with a custom project execution image. The
+image is built locally from the pinned upstream Airflow base image and contains
+the project code, Java 17, PySpark, and dbt required by the DAG tasks.
+
+Initialize or refresh the local Airflow runtime with:
+
+```bash
+make airflow-bootstrap
+```
+
+The bootstrap is rerunnable. It ensures Airflow environment values, initializes
+the Airflow metadata database, builds and validates `neurosleep-airflow:phase10`,
+prepares the state volume, runs metadata migrations, and starts the scheduler,
+DAG processor, and API server.
+
+Useful Airflow commands:
+
+```bash
+make airflow-up
+make airflow-down
+make airflow-ps
+make airflow-smoke
+make airflow-password
+```
+
+Airflow is available on port `8080`. The containers use service-network addresses
+for project dependencies:
+
+```text
+PostgreSQL: postgres:5432
+MinIO:      http://minio:9000
+```
+
+The host workflow continues using `localhost:5433` and `localhost:9000`.
+`.env` is not copied into the Airflow image; Compose injects the container runtime
+configuration.
+
+See [`airflow_orchestration.md`](airflow_orchestration.md).
+
+## 8. Source Configuration
 
 Sample profile:
 
@@ -133,7 +176,7 @@ Full profile:
 DATA_PROFILE=full
 ```
 
-## 8. Validation
+## 9. Validation
 
 Common suites:
 
@@ -161,12 +204,17 @@ Complete milestone regressions:
 ```bash
 make phase8-check
 make phase9-check
+make phase10-check
 ```
 
 `phase9-check` runs the normal smoke suites, full Spark feature validation,
 source Gold validation, feature integration validation, integrated Gold
 validation, and a full dbt build.
-## 9. Run Extract
+
+`phase10-check` runs the complete Phase 9 regression and then validates the
+Python dependency contract, Airflow execution image, Compose runtime connectivity,
+Airflow foundation smoke DAG, and the main eight-task pipeline DAG contract.
+## 10. Run Extract
 
 Example one-recording Extract:
 
@@ -177,7 +225,7 @@ SLEEP_EDF_MAX_RECORDINGS=1 PYTHONPATH=src python -m neuro_sleep.ingestion.sleep_
 See [`extract_runbook.md`](extract_runbook.md) before production-like reruns or
 manual recovery.
 
-## 10. Run Silver
+## 11. Run Silver
 
 Plan current recording batch:
 
@@ -220,7 +268,7 @@ in MinIO. An unchanged rerun returns `skipped`.
 Completed Silver production outputs should also return `skipped` on an
 unchanged rerun.
 
-## 11. Run Spark and Gold
+## 12. Run Spark and Gold
 
 Spark uses the local Java runtime plus PySpark from the project virtual
 environment. The S3A dependency is resolved through the Spark package argument
@@ -283,14 +331,18 @@ make integrated-gold-reliability-smoke
 See [`spark_signal_features.md`](spark_signal_features.md) for the Phase 8
 feature path and [`feature_integration.md`](feature_integration.md) for Phase 9
 join semantics, lineage, and publication behavior.
-## 12. Stop Services
+## 13. Stop Services
 
 
 ```bash
+make airflow-down
 make down
 ```
 
-## 13. Git Safety
+Stop Airflow first when both Airflow and the base PostgreSQL/MinIO stack are
+running.
+
+## 14. Git Safety
 
 Before every commit:
 

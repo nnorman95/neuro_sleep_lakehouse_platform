@@ -179,6 +179,9 @@ make integrated-signal-features-check
 make integrated-gold-reliability-smoke
 make phase8-check
 make phase9-check
+make airflow-bootstrap
+make airflow-smoke
+make phase10-check
 ```
 
 This reduces the need to remember long combinations of Python module paths,
@@ -214,7 +217,39 @@ The Warehouse context receives a deterministic SHA-256 fingerprint. If the
 context changes, Phase 9 produces a new immutable representation rather than
 requiring manual cleanup or overwriting historical output.
 
-## 11. What is deliberately not optimized
+
+## 11. Phase 10 orchestration and manual-step reduction
+
+Before Phase 10, a full pipeline run required remembering and executing the
+Bronze, Silver, staging, dbt, Gold, and integration commands in the correct order.
+Phase 10 replaces that manual dependency management with one Airflow DAG while
+reusing the same implementation underneath.
+
+```text
+manual workflow:
+multiple ordered commands + manual dependency tracking
+
+Phase 10 workflow:
+one neurosleep_lakehouse_pipeline DAG run
+8 existing project tasks
+bounded parallelism=2
+max_active_runs=1
+```
+
+This removes orchestration duplication rather than moving business logic into
+Airflow. The same idempotency, reconciliation, quality gates, and fail-closed
+selection rules remain inside the project modules and scripts.
+
+Two consecutive full DAG runs completed successfully. On the unchanged rerun,
+the Gold feature task completed in about 6.5 seconds compared with about 135
+seconds on the first run, consistent with the existing completed-publication skip
+path. The full Phase 9 regression passed after the repeated Airflow runs.
+
+The Airflow bootstrap is also rerunnable and now builds the project execution
+image itself. A fresh environment therefore does not depend on a manually
+prebuilt local image.
+
+## 12. What is deliberately not optimized
 
 The project does not currently add:
 
@@ -229,7 +264,7 @@ These omissions are part of the optimization strategy: operational simplicity is
 preferred over infrastructure or tuning that does not solve a demonstrated
 problem.
 
-## 12. Evidence to preserve in later phases
+## 13. Evidence to preserve in later phases
 
 Later phases should continue recording evidence such as:
 
