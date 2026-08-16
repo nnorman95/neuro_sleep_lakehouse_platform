@@ -425,6 +425,51 @@ Full dbt:      257/257
 - exposing restricted subject identifiers in broad marts by default;
 - documenting a constraint that the physical database does not enforce.
 
+## Kafka Device-Event Quality Rules
+
+Phase 11 distinguishes **invalid messages** from **valid events with unusual
+arrival behavior**.
+
+Contract-invalid Kafka messages:
+
+```text
+decode / schema / key / header / timestamp failure
+  -> quality.quarantine_records
+  -> preserve raw Kafka transport evidence
+  -> commit Kafka offset only after quarantine persistence succeeds
+```
+
+A quarantine persistence failure leaves the Kafka offset unchanged.
+
+Structurally valid events:
+
+```text
+valid event
+  -> ops.kafka_device_event_inbox
+  -> event_id deduplication
+  -> arrival classification
+```
+
+The current late threshold is 60,000 ms. Late and out-of-order flags are
+diagnostic quality metadata; they do not turn a structurally valid event into a
+quarantine record.
+
+Out-of-order detection is evaluated against prior persisted events in the same
+device session and records one of:
+
+```text
+sequence
+event_time
+sequence_and_event_time
+```
+
+A forward sequence gap alone is allowed. Reuse of an `event_id` with different
+canonical event content fails closed.
+
+Warehouse tests then validate the trusted inbox source and
+`warehouse.fact_device_event` grain, relationships, accepted values, and
+required fields.
+
 ## 17. Current Status
 
 Implemented:
@@ -443,14 +488,16 @@ Recording metadata staging schema and loader validation
 Warehouse Core schema and dimensional-grain checks
 Warehouse fail-closed selection gates
 Warehouse transformation relationship and reconciliation tests
-Warehouse + mart dbt contracts and regression: 257/257
+Warehouse + mart + device-event dbt contracts and regression: 301/301
+Kafka invalid-message quarantine and restart-safe offset handling
+Kafka late/out-of-order classification
 Interruption and failure cleanup tests
 ```
 
 Next:
 
 ```text
-Gold feature-quality rules when versioned feature datasets exist
+additional Gold feature-quality rules only when a concrete downstream requirement exists
 signal-quality rules only after a trusted analytical signal-quality dataset exists
-device-event and streaming quality rules when those sources are introduced
+broader streaming observability only when a concrete operational requirement exists
 ```

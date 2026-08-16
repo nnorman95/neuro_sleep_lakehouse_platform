@@ -874,6 +874,12 @@ MinIO Silver Parquet
 -> dbt sources and tests
 -> dbt Warehouse dimensions and facts
 -> Phase 7 analytical intermediates and marts
+
+Simulated BCI event
+-> Kafka
+-> validated durable ops.kafka_device_event_inbox
+-> dbt source + contract
+-> warehouse.fact_device_event
 ```
 
 ### Python staging loader responsibilities
@@ -923,7 +929,29 @@ Pipeline quality warnings in `quality.quality_check_results` are not equivalent 
 
 ### `warehouse.fact_device_event`
 
-Deferred because no device-event source or Silver dataset exists.
+Implemented in Phase 11 from the validated durable Kafka inbox.
+
+Grain:
+
+```text
+one validated source event_id
+```
+
+Primary analytical identity:
+
+```text
+device_event_sk = deterministic Warehouse surrogate key
+event_id        = stable source/business deduplication key
+```
+
+The fact retains source event identity, device/session identity, event type,
+event time, sequence number, validated payload, canonical event fingerprint,
+arrival-quality classification, durable ingestion timestamps, delivery count,
+and first/last Kafka partition-offset lineage.
+
+The source is `ops.kafka_device_event_inbox`, not Silver Parquet. Structurally
+invalid Kafka messages are quarantined before this model; valid late or
+out-of-order messages remain eligible and carry explicit flags.
 
 ### `warehouse.fact_recording_summary`
 
@@ -1013,12 +1041,14 @@ Analytical cohort: 18 recordings / 9 represented subjects
 Silver subjects: 100 / recording contexts: 197
 PostgreSQL staging: 18 recordings / 110 channels / 3,263 intervals / 35,710 epochs
 Warehouse Core: 100 subjects / 18 recordings / 110 channels / 8 source stages / 35,710 epochs
+Phase 11 Warehouse device-event fact implemented at one row per event_id
 Fail-closed dbt version selection and deterministic Warehouse keys
-Warehouse governance contracts: 5 active v1 contracts / 81 of 81 columns classified
+Warehouse governance contracts: 6 active v1 contracts / 108 of 108 columns classified
 Phase 7 analytical intermediates and three marts
 Mart rows: 18 recording summaries / 126 stage rows / 6 coverage rows
 Core + reliability + Silver smoke suites: 58/58
-Full dbt build: 257/257 PASS
+Full dbt build: 301/301 PASS
+Phase 11 Kafka validation audit: PASS
 ```
 
 Not implemented yet:

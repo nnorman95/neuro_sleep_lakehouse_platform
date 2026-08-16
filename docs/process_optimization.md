@@ -182,6 +182,17 @@ make phase9-check
 make airflow-bootstrap
 make airflow-smoke
 make phase10-check
+make kafka-up
+make kafka-init
+make kafka-topic-check
+make kafka-producer-check
+make kafka-consumer-check
+make kafka-inbox-check
+make kafka-ingestion-check
+make kafka-invalid-check
+make kafka-arrival-check
+make kafka-warehouse-check
+make phase11-check
 ```
 
 This reduces the need to remember long combinations of Python module paths,
@@ -248,6 +259,32 @@ path. The full Phase 9 regression passed after the repeated Airflow runs.
 The Airflow bootstrap is also rerunnable and now builds the project execution
 image itself. A fresh environment therefore does not depend on a manually
 prebuilt local image.
+
+## Phase 11 streaming restart safety
+
+Phase 11 reduces manual Kafka recovery work by making the durable outcome the
+boundary for Kafka offset movement.
+
+```text
+validate message
+-> persist inbox or quarantine
+-> synchronous Kafka offset commit
+```
+
+If persistence fails, the offset is not moved. If persistence succeeds but the
+offset commit is lost, replay is safe because `event_id` deduplication prevents a
+second business event row.
+
+This deliberately uses at-least-once processing rather than introducing a
+distributed transaction system for a local project that does not require one.
+
+The Phase 11 validator also snapshots topic offsets before producing fixtures,
+uses isolated consumer groups, and cleans temporary PostgreSQL rows. Tests do
+not depend on historical messages already retained in the topic.
+
+`make phase11-check` replaces a long manual sequence of component checks with one
+canonical final audit while still keeping each focused validator independently
+runnable.
 
 ## 12. What is deliberately not optimized
 
