@@ -29,6 +29,7 @@ contracts/warehouse_dim_recording.yml
 contracts/warehouse_dim_channel.yml
 contracts/warehouse_dim_sleep_stage.yml
 contracts/warehouse_fact_sleep_epoch.yml
+contracts/warehouse_fact_device_event.yml
 ```
 
 ## 2. Active and Historical Staging Contracts
@@ -70,6 +71,44 @@ quality_quarantine_records_v2.yml
     active v2 contract; documents the active-incident identity used by
     Silver quality-gate quarantine routing
 ```
+
+## Kafka Device-Event Contracts
+
+Phase 11 adds two version-controlled streaming contracts outside the PostgreSQL
+table-contract registry:
+
+```text
+contracts/simulated_bci_device_event_v1.schema.json
+contracts/kafka/simulated_bci_device_events_v1.topic.json
+```
+
+The event contract defines the payload-level identity and schema, including
+`event_id`, `device_id`, `session_id`, `event_type`, UTC `event_time`,
+non-negative `sequence_number`, and event-specific `payload`.
+
+The topic contract defines:
+
+```text
+topic: neurosleep.simulated-bci.device-events.v1
+key_field: device_id
+partitions: 3
+replication_factor: 1
+cleanup.policy: delete
+retention.ms: 604800000
+min.insync.replicas: 1
+```
+
+Topic initialization is explicit and idempotent; configuration drift fails
+closed.
+
+The downstream PostgreSQL Warehouse contract is:
+
+```text
+contracts/warehouse_fact_device_event.yml
+```
+
+It is registered as an active v1 governance contract by seed `045`, while seed
+`046` classifies all 27 physical fact columns.
 
 ## 3. Silver Parquet Contracts
 

@@ -1,9 +1,10 @@
 # Architecture
 
-This document describes the platform as implemented through **Phase 10: Airflow Orchestration**. Bronze, Silver, PostgreSQL staging, the Warehouse Core,
-relational marts, the Phase 8 signal-feature path, and the Phase 9 integrated Gold
-representation remain unchanged. Phase 10 adds a thin Airflow control plane that
-invokes the existing project entrypoints in dependency order.
+This document describes the platform as implemented through **Phase 11: Kafka
+Device Events**. The existing Bronze, Silver, PostgreSQL staging, Warehouse,
+relational marts, Spark/Gold, integrated Gold, and Phase 10 Airflow paths remain
+in place. Phase 11 adds a local Kafka/KRaft streaming path for simulated BCI
+device events with durable PostgreSQL ingestion and a dbt Warehouse fact.
 
 ## 1. Source
 
@@ -42,7 +43,7 @@ raw         source-object registry and ingestion metadata
 staging     verified relational landing for selected Silver publications
 warehouse   dimensional analytical core
 mart        consumption-ready relational analytics
-ops         pipeline runs and file-attempt history
+ops         pipeline runs, file-attempt history, and durable Kafka event inbox
 quality     quarantine metadata and durable quality results
 governance  source registry, contracts, and column classifications
 ```
@@ -91,6 +92,26 @@ ops.file_attempt
 quality.quality_check_results
 quality.quarantine_records
 ```
+### Phase 11 streaming path
+
+```text
+Simulated BCI device events
+  -> versioned event contract
+  -> Kafka 4.3.1 / KRaft
+  -> neurosleep.simulated-bci.device-events.v1
+  -> resilient consumer
+  -> invalid message -> quality.quarantine_records
+  -> valid event -> ops.kafka_device_event_inbox
+  -> event_id deduplication
+  -> late/out-of-order classification
+  -> Kafka offset commit only after durable outcome
+  -> dbt warehouse.fact_device_event
+```
+
+This path uses practical at-least-once processing with idempotent database
+effects. It does not claim a distributed exactly-once transaction across Kafka
+and PostgreSQL.
+
 ## 4. Bronze architecture
 
 Bronze keeps the source layout under:
@@ -357,10 +378,11 @@ Relational baseline:
 Core smoke tests:         15/15
 Reliability smoke tests:  17/17
 Silver smoke tests:       26/26
-dbt models:               14
-dbt data tests:           249
-Full dbt build:           257/257 PASS
+dbt models:               15
+dbt data tests:           292
+Full dbt build:           301/301 PASS
 Phase 10 regression:       PASS
+Phase 11 Kafka audit:      PASS
 ```
 
 Phase 8 has additionally verified:
@@ -453,14 +475,33 @@ and the Phase 9 regression remained green afterward.
 
 See [`airflow_orchestration.md`](airflow_orchestration.md).
 
-## 17. Next architectural scope
+## 17. Phase 11 Kafka device-event architecture
 
-Still outside Phase 10:
+Phase 11 is implemented as a parallel streaming source path. Kafka topic
+creation is explicit and idempotent, automatic topic creation is disabled, and
+the single-node local runtime uses KRaft rather than ZooKeeper.
 
-- device-event streaming with Kafka;
-- broader quality hardening and operational observability;
+The durable inbox has one row per stable `event_id`. Identical replay updates
+delivery metadata; reuse of an `event_id` for different canonical event content
+fails closed. Contract-invalid Kafka messages reuse the existing quarantine
+system. Structurally valid late or out-of-order events remain trusted events and
+carry explicit arrival-quality flags.
+
+`warehouse.fact_device_event` is a contracted dbt table sourced from the durable
+inbox and retains Kafka lineage, arrival classification, and source payload.
+
+See [`kafka_device_events.md`](kafka_device_events.md).
+
+## 18. Next architectural scope
+
+Still outside Phase 11:
+
+- broader streaming observability and metrics only when a concrete operational
+  requirement exists;
 - dashboards and broader BI access;
-- full-source processing.
+- full-source processing;
+- analytical signal-quality facts once a trusted signal-quality dataset and
+  grain are defined.
 
 Those layers should be added only when their upstream datasets, grain, and use
 are explicit.
