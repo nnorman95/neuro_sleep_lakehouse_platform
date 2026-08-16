@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -38,6 +38,7 @@ help:
 	@echo "make kafka-invalid-check  Validate invalid-message quarantine flow"
 	@echo "make kafka-arrival-check  Validate late and out-of-order event classification"
 	@echo "make kafka-warehouse-check Validate warehouse.fact_device_event"
+	@echo "make phase11-check        Run complete Phase 11 Kafka audit"
 	@echo "make kafka-smoke          Validate Kafka runtime"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
@@ -164,6 +165,9 @@ kafka-arrival-check:
 
 kafka-warehouse-check:
 	./scripts/validate_kafka_warehouse_fact.sh
+
+phase11-check:
+	./scripts/validate_phase11_kafka_device_events.sh
 
 kafka-smoke:
 	./scripts/validate_kafka_runtime.sh
