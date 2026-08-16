@@ -19,6 +19,9 @@ from neuro_sleep.streaming.kafka_consumer import (
 from neuro_sleep.streaming.kafka_producer import (
     load_device_event_topic,
 )
+from neuro_sleep.streaming.kafka_quarantine import (
+    quarantine_invalid_device_event_message,
+)
 
 
 DEFAULT_GROUP_ID = "neurosleep-device-event-inbox-v1"
@@ -86,10 +89,15 @@ def main() -> None:
             )
         )
 
-    processed = consumer.process_events(
-        processor=persist,
-        max_messages=args.max_messages,
-        timeout_seconds=args.timeout_seconds,
+    processing_result = (
+        consumer.process_events_resilient(
+            processor=persist,
+            invalid_message_handler=(
+                quarantine_invalid_device_event_message
+            ),
+            max_messages=args.max_messages,
+            timeout_seconds=args.timeout_seconds,
+        )
     )
 
     counts = Counter(
@@ -105,7 +113,7 @@ def main() -> None:
     )
     print(
         "kafka_ingestion_messages_processed="
-        f"{len(processed)}"
+        f"{processing_result.messages_handled}"
     )
     print(
         "kafka_ingestion_inbox_inserted="
@@ -114,6 +122,10 @@ def main() -> None:
     print(
         "kafka_ingestion_inbox_duplicates="
         f"{counts.get('duplicate', 0)}"
+    )
+    print(
+        "kafka_ingestion_quarantined_messages="
+        f"{processing_result.quarantined_messages}"
     )
     print(
         "kafka_ingestion_offset_commit_policy="
