@@ -47,3 +47,6 @@ dbt/logs/
 
 # Local dbt user state
 dbt/.user.yml
+
+# Airflow local runtime state
+airflow/state/

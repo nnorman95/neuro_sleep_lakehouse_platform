@@ -8,7 +8,8 @@ metadata into PostgreSQL, and builds analytical models with dbt.
 Phase 8 is complete and released as `v0.5.0-features`. Phase 9 adds
 **Feature Integration**: compact Gold signal features are joined to Warehouse
 subject, recording, channel, and optional sleep-stage context without
-recomputing sample-level signals.
+recomputing sample-level signals. Phase 10 adds **Airflow orchestration** around
+the existing project entrypoints without moving data-processing logic into DAGs.
 
 ## Current state
 
@@ -24,6 +25,7 @@ Analytical marts:               18 summary rows / 126 stage rows / 6 coverage ro
 Full-signal subset:             5 recordings / 116,242,840 Silver signal rows
 Gold signal features:           5 recordings / 83,909 rows / 5 Parquet files
 Integrated Gold features:       5 recordings / 83,909 rows / 83,384 labeled / 525 unlabeled
+Orchestration:                  Airflow 3.3.1 / LocalExecutor / 8-task pipeline DAG
 ```
 
 The analytical cohort is larger than the full-signal subset on purpose. Phase 7
@@ -34,6 +36,11 @@ coverage without doing expensive work that the current models do not use.
 ## Architecture
 
 ```text
+Airflow 3.3.1 / LocalExecutor
+neurosleep_lakehouse_pipeline
+        |
+        | invokes existing project entrypoints
+        v
 PhysioNet Sleep-EDF
         |
         v
@@ -206,6 +213,43 @@ representations on rerun.
 
 More detail is in
 [`docs/feature_integration.md`](docs/feature_integration.md).
+### Phase 10 Airflow orchestration
+
+Airflow is a thin control plane over the existing pipeline commands. The DAG does
+not reimplement Bronze, Silver, staging, dbt, Spark, or Gold business logic.
+
+```text
+extract_bronze
+      |
+      +----------------------+
+      v                      v
+build_subject_metadata_    build_recording_silver
+silver                      |
+      |                     +--------------------+
+      v                     v                    v
+load_subject_metadata_   load_recording_      build_gold_signal_
+staging                  staging              features
+      |                     |                    |
+      +----------+----------+                    |
+                 v                               |
+       build_warehouse_and_marts                 |
+                 |                               |
+                 +---------------+---------------+
+                                 v
+                 build_integrated_signal_features
+```
+
+The DAG uses `schedule=None`, `catchup=False`, `max_active_runs=1`, one retry per
+task, and the existing project commands inside the custom
+`neurosleep-airflow:phase10` execution image. The local Airflow runtime uses
+`LocalExecutor` with project-level parallelism limited to two tasks.
+
+Two consecutive full scheduler-driven runs completed with all 8 tasks successful.
+The second run reused existing idempotent outputs instead of duplicating them.
+
+More detail is in
+[`docs/airflow_orchestration.md`](docs/airflow_orchestration.md).
+
 ## Validation
 
 Current verified regression status:
@@ -226,6 +270,12 @@ Feature integration validation:           83,909 rows / 83,384 labeled / 525 unl
 Integrated Gold publication:              5/5 recordings / 83,909 rows
 Integrated Gold full rerun:               0 written / 5 skipped
 Integrated Gold recovery/fail-closed:     PASS
+Airflow runtime image validation:          PASS
+Airflow Compose/runtime connectivity:      PASS
+Airflow foundation smoke:                  PASS
+Pipeline DAG contract:                     8/8 tasks
+Full Airflow DAG runs:                      2/2 success
+Phase 10 regression:                       PASS
 ```
 
 The Phase 7 relational baseline also confirms:
@@ -248,6 +298,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 make bootstrap
+make airflow-bootstrap
 ```
 
 The project supports Python 3.11+. The current local development environment uses
@@ -275,6 +326,13 @@ make integrated-signal-features-check
 make integrated-gold-reliability-smoke
 make phase8-check
 make phase9-check
+make phase10-check
+make airflow-bootstrap
+make airflow-up
+make airflow-down
+make airflow-ps
+make airflow-smoke
+make airflow-password
 make test
 make source-check
 make psql
@@ -302,7 +360,9 @@ v0.5.0-features
 ```
 
 Phase 9 extends the released feature layer with Warehouse-aware integrated Gold
-data while preserving the reusable Phase 8 signal-feature dataset.
+data while preserving the reusable Phase 8 signal-feature dataset. Phase 10 is
+the current orchestration milestone; it adds a reproducible Airflow runtime and a
+thin end-to-end DAG. No Phase 10 release tag has been created yet.
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md)
@@ -310,6 +370,7 @@ data while preserving the reusable Phase 8 signal-feature dataset.
 - [`docs/analytics_marts.md`](docs/analytics_marts.md)
 - [`docs/spark_signal_features.md`](docs/spark_signal_features.md)
 - [`docs/feature_integration.md`](docs/feature_integration.md)
+- [`docs/airflow_orchestration.md`](docs/airflow_orchestration.md)
 - [`docs/process_optimization.md`](docs/process_optimization.md)
 - [`docs/data_model.md`](docs/data_model.md)
 - [`docs/database_schemas.md`](docs/database_schemas.md)
