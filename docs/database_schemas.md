@@ -18,9 +18,9 @@ uses Python 3.13.5.
 |---|---|---|
 | `raw` | source-object registry and ingestion metadata | implemented |
 | `staging` | relational landing area for selected Silver datasets | subject and recording loaders implemented |
-| `warehouse` | dimensional analytical models | five-table Warehouse Core implemented through dbt |
+| `warehouse` | dimensional analytical models | Warehouse Core plus Phase 11 device-event fact implemented through dbt |
 | `mart` | consumption-ready relational models | three Phase 7 dbt marts implemented |
-| `ops` | pipeline execution and file-attempt history | implemented |
+| `ops` | pipeline execution, file-attempt history, and durable Kafka inbox | implemented |
 | `quality` | quarantine and durable quality history | implemented |
 | `governance` | source registry, contracts, and classification | implemented |
 
@@ -84,6 +84,58 @@ started_at
 finished_at
 created_at
 ```
+
+### `ops.kafka_device_event_inbox`
+
+Grain: one stable validated Kafka `event_id`.
+
+Implemented by migration `043_create_ops_kafka_device_event_inbox.sql`; migration
+`044_add_kafka_device_event_arrival_classification.sql` adds the late and
+out-of-order classification fields.
+
+Important groups:
+
+```text
+source event:
+  event_id
+  source_system
+  schema_version
+  device_id
+  session_id
+  event_type
+  event_time
+  sequence_number
+  raw_event
+  event_fingerprint_sha256
+
+Kafka lineage:
+  kafka_topic
+  first_kafka_partition
+  first_kafka_offset
+  last_kafka_partition
+  last_kafka_offset
+  kafka_timestamp_ms
+  kafka_headers
+
+durability:
+  first_ingested_at
+  last_ingested_at
+  delivery_count
+
+arrival quality:
+  arrival_classification_version
+  ingestion_delay_ms
+  late_threshold_ms
+  is_late
+  is_out_of_order
+  out_of_order_reason
+  previous_max_sequence_number
+  previous_max_event_time
+```
+
+`event_id` is the business deduplication key. An identical replay refreshes
+delivery metadata without creating a second row. Different canonical event
+content under the same `event_id` fails closed.
 
 ## 4. Implemented Raw Table
 
@@ -374,6 +426,7 @@ warehouse.dim_recording         18 rows
 warehouse.dim_channel          110 rows
 warehouse.dim_sleep_stage        8 rows
 warehouse.fact_sleep_epoch  35,710 rows
+warehouse.fact_device_event     implemented; validation fixtures cleaned after tests
 ```
 
 The tables are dbt-managed full-rebuild relations rather than SQL-migration DDL.
@@ -383,7 +436,9 @@ and ADR 003. Cross-model integrity is enforced through dbt relationship and
 reconciliation tests rather than hard PostgreSQL foreign keys between independently
 replaced dbt tables.
 
-`warehouse.fact_signal_quality` and device-event tables remain future scope.
+`warehouse.fact_signal_quality` remains future scope. The Phase 11
+`warehouse.fact_device_event` model is implemented and sourced from the durable
+Kafka inbox.
 
 ## 10. Implemented Mart Tables
 
@@ -459,12 +514,20 @@ The current manifest includes:
 040_seed_column_classification_warehouse_core.sql
 041_add_quality_quarantine_active_identity.sql
 042_seed_data_contract_registry_quality_quarantine_records_v2.sql
+043_create_ops_kafka_device_event_inbox.sql
+044_add_kafka_device_event_arrival_classification.sql
+045_seed_data_contract_registry_warehouse_fact_device_event.sql
+046_seed_column_classification_warehouse_fact_device_event.sql
 ```
 
-Seeds `039` and `040` register five active Warehouse v1 governance contracts and
-classify all 81 Warehouse columns. Migration `041` adds the active quarantine
-identity index, and seed `042` activates the v2 quarantine contract. Warehouse
-and mart table creation remains owned by dbt, not by the migration manifest.
+Seeds `039` and `040` register the five original Warehouse Core v1 contracts
+and classify all 81 original Warehouse columns. Migration `041` adds the active
+quarantine identity index, and seed `042` activates the v2 quarantine contract.
+Migrations `043` and `044` implement the durable Kafka inbox and arrival
+classification. Seeds `045` and `046` register
+`warehouse.fact_device_event` and classify its 27 columns, bringing Warehouse
+classification coverage to 108 physical columns. Warehouse and mart table
+creation remains owned by dbt, not by the migration manifest.
 
 ## 13. Migration Rules
 

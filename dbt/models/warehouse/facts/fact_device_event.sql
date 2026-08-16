@@ -1,0 +1,97 @@
+{{ config(materialized='table') }}
+
+with inbox as (
+    select
+        event_id,
+        source_system,
+        schema_version,
+        device_id,
+        session_id,
+        event_type,
+        event_time,
+        sequence_number,
+        raw_event,
+        event_fingerprint_sha256,
+        arrival_classification_version,
+        ingestion_delay_ms,
+        late_threshold_ms,
+        is_late,
+        is_out_of_order,
+        out_of_order_reason,
+        first_ingested_at,
+        last_ingested_at,
+        delivery_count,
+        kafka_topic,
+        first_kafka_partition,
+        first_kafka_offset,
+        last_kafka_partition,
+        last_kafka_offset,
+        created_at,
+        updated_at
+    from {{ source('ops', 'kafka_device_event_inbox') }}
+),
+
+final as (
+    select
+        {{ warehouse_surrogate_key([
+            "'device_event'",
+            "event_id::text"
+        ]) }} as device_event_sk,
+        event_id,
+        source_system,
+        schema_version,
+        device_id,
+        session_id,
+        event_type,
+        event_time,
+        sequence_number,
+        raw_event -> 'payload' as payload,
+        event_fingerprint_sha256,
+        arrival_classification_version,
+        ingestion_delay_ms,
+        late_threshold_ms,
+        is_late,
+        is_out_of_order,
+        out_of_order_reason,
+        first_ingested_at,
+        last_ingested_at,
+        delivery_count,
+        kafka_topic,
+        first_kafka_partition,
+        first_kafka_offset,
+        last_kafka_partition,
+        last_kafka_offset,
+        created_at as inbox_created_at,
+        updated_at as inbox_updated_at
+    from inbox
+)
+
+select
+    device_event_sk,
+    event_id,
+    source_system,
+    schema_version,
+    device_id,
+    session_id,
+    event_type,
+    event_time,
+    sequence_number,
+    payload,
+    event_fingerprint_sha256,
+    arrival_classification_version,
+    ingestion_delay_ms,
+    late_threshold_ms,
+    is_late,
+    is_out_of_order,
+    out_of_order_reason,
+    first_ingested_at,
+    last_ingested_at,
+    delivery_count,
+    kafka_topic,
+    first_kafka_partition,
+    first_kafka_offset,
+    last_kafka_partition,
+    last_kafka_offset,
+    inbox_created_at,
+    inbox_updated_at
+from final

@@ -2,8 +2,9 @@
 
 This document follows data from PhysioNet through the relational analytics
 path, the Phase 8 Spark/Gold signal-feature path, the Phase 9 feature integration
-path, and the Phase 10 Airflow control flow. It focuses on what is implemented
-today and where the project deliberately stops.
+path, the Phase 10 Airflow control flow, and the Phase 11 Kafka device-event
+stream. It focuses on what is implemented today and where the project
+deliberately stops.
 
 ## 1. Extract and Bronze
 
@@ -448,5 +449,48 @@ Two consecutive full DAG runs completed with all eight tasks successful. The
 second run exercised the existing idempotent/skip behavior, and the full Phase 9
 regression passed afterward, confirming that orchestration did not change data
 grain or duplicate the existing publications.
+
+## 16. Phase 11 Kafka device-event flow
+
+The streaming source is intentionally separate from the Sleep-EDF batch path:
+
+```text
+simulated_bci_device
+  -> DeviceEvent contract v1.0.0
+  -> Kafka producer
+  -> neurosleep.simulated-bci.device-events.v1
+  -> consumer validation
+```
+
+Valid path:
+
+```text
+valid event
+  -> ops.kafka_device_event_inbox
+  -> event_id deduplication
+  -> ingestion-delay classification
+  -> late / out-of-order flags
+  -> synchronous Kafka offset commit
+  -> dbt warehouse.fact_device_event
+```
+
+Invalid path:
+
+```text
+contract-invalid Kafka message
+  -> quality.quarantine_records
+  -> raw transport metadata/payload retained
+  -> synchronous Kafka offset commit only after quarantine persistence
+```
+
+If durable inbox or quarantine persistence fails, the Kafka offset does not
+advance. A later replay is therefore expected. Identical valid replays are
+idempotent at the inbox through `event_id`.
+
+Current late-event threshold is 60 seconds. A valid forward sequence gap is not
+automatically treated as out of order; a later backward sequence and/or event
+time is classified explicitly.
+
+See [`kafka_device_events.md`](kafka_device_events.md).
 
 See [`airflow_orchestration.md`](airflow_orchestration.md).

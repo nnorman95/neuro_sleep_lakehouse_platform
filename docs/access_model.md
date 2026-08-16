@@ -104,6 +104,26 @@ number of subjects. It still requires review before broad publication.
 When data is prepared for wider access, prefer less identifying groupings (for
 example age bands) when the analytical question permits it.
 
+## Device-Event Access Boundary
+
+Phase 11 simulated BCI events are generated data, but the Warehouse contract is
+modeled as health-device telemetry so that the access model remains realistic.
+
+Controlled identifiers include:
+
+```text
+event_id
+device_id
+session_id
+```
+
+They are pseudonymous rather than direct identifiers. Event payloads and
+event-time activity are treated as restricted health telemetry in
+`warehouse.fact_device_event`.
+
+Kafka topic/partition/offset fields are operational lineage and use internal
+team-only classification where appropriate.
+
 ## 6. Secrets and Credentials
 
 Secrets belong in the local `.env` file and must never be committed.
@@ -135,8 +155,9 @@ access_policy
 masking_policy
 ```
 
-Warehouse Core tables have registry-backed column classification for all 81
-physical columns. Phase 7 marts currently use enforced dbt contracts and inherit
+Warehouse tables have registry-backed column classification for all 108
+physical columns: 81 original Warehouse Core columns plus 27 columns in
+`warehouse.fact_device_event`. Phase 7 marts currently use enforced dbt contracts and inherit
 the restricted analytical policy from their Warehouse inputs. Dedicated mart
 registry classifications are intentionally deferred until the access/BI phase,
 before any broader publication is enabled.
@@ -150,7 +171,7 @@ Implemented:
 - governance registries and column classification;
 - restricted handling guidance for patient-level Bronze and Silver data;
 - subject/context staging column classifications;
-- Warehouse Core classification for all 81 physical columns;
+- Warehouse classification for all 108 physical columns, including the Phase 11 device-event fact;
 - restricted/redacted handling for source subject identifiers;
 - aggregate-only policy for exact demographic/treatment fields where configured;
 - Phase 7 marts that omit direct subject IDs and source-object lineage and remain restricted pending broader-access review.
