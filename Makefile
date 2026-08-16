@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check test source-check psql clean-pycache airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
+.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password
 
 help:
 	@echo "NeuroSleep local commands"
@@ -23,6 +23,7 @@ help:
 	@echo "make integrated-gold-reliability-smoke Test integrated Gold recovery and fail-closed behavior"
 	@echo "make phase8-check         Run complete Phase 8 regression"
 	@echo "make phase9-check         Run complete Phase 9 regression"
+	@echo "make phase10-check        Run complete Phase 10 regression"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
 	@echo "make airflow-down         Stop Airflow services only"
@@ -93,6 +94,9 @@ phase8-check:
 
 phase9-check:
 	./scripts/validate_phase9.sh
+
+phase10-check:
+	./scripts/validate_phase10.sh
 
 test: smoke reliability-smoke silver-smoke spark-smoke gold-reliability-smoke integrated-gold-reliability-smoke
 
