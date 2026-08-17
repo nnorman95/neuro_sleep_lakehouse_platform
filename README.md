@@ -13,6 +13,10 @@ the existing project entrypoints without moving data-processing logic into DAGs.
 Phase 11 adds a **Kafka device-event stream** with contract validation, durable
 PostgreSQL ingestion, event-id deduplication, restart-safe offset handling,
 invalid-message quarantine, arrival classification, and a dbt Warehouse fact.
+Phase 12 adds **Data Quality Hardening** with controlled broken-data fixtures that
+prove existing Silver and staging boundaries fail closed on schema drift,
+manifest-integrity defects, publication inconsistencies, and subject-metadata
+identity defects.
 
 ## Current state
 
@@ -289,6 +293,26 @@ the project does not claim distributed exactly-once semantics.
 More detail is in
 [`docs/kafka_device_events.md`](docs/kafka_device_events.md).
 
+### Phase 12 data quality hardening
+
+Phase 12 exercises existing validation behavior with controlled broken-data
+fixtures instead of adding a second quality framework:
+
+```text
+Silver schema drift
+Silver manifest integrity
+Silver publication consistency
+Subject-metadata identity
+```
+
+The fixtures reuse production validation functions and temporary local data.
+They do not modify trusted Bronze/Silver outputs and do not introduce another
+quarantine path. The final `make phase12-check` audit also reruns the complete
+26-test Silver regression.
+
+More detail is in
+[`docs/data_quality_hardening.md`](docs/data_quality_hardening.md).
+
 ## Validation
 
 Current verified regression status:
@@ -316,6 +340,9 @@ Pipeline DAG contract:                     8/8 tasks
 Full Airflow DAG runs:                      2/2 success
 Phase 10 regression after Phase 11:        PASS
 Phase 11 Kafka audit:                     PASS
+Phase 12 broken-data fixture groups:          4/4 PASS
+Phase 12 Silver regression:                   26/26 PASS
+Phase 12 data-quality audit:                  PASS
 ```
 
 The Phase 7 relational baseline also confirms:
@@ -378,6 +405,8 @@ make kafka-invalid-check
 make kafka-arrival-check
 make kafka-warehouse-check
 make phase11-check
+make phase12-quality-smoke
+make phase12-check
 make airflow-bootstrap
 make airflow-up
 make airflow-down
@@ -412,11 +441,12 @@ v0.5.0-features
 
 Phase 9 extends the released feature layer with Warehouse-aware integrated Gold
 data while preserving the reusable Phase 8 signal-feature dataset. Phase 10 adds
-a reproducible Airflow runtime and a thin end-to-end DAG. Phase 11 is the current
-streaming milestone: it adds a local Kafka/KRaft device-event path, durable
-restart-safe consumption, quarantine handling, arrival classification, and
-`warehouse.fact_device_event`. No Phase 10 or Phase 11 release tag has been
-created yet.
+a reproducible Airflow runtime and a thin end-to-end DAG. Phase 11 adds the local
+Kafka/KRaft device-event path, durable restart-safe consumption, quarantine
+handling, arrival classification, and `warehouse.fact_device_event`. Phase 12
+hardens existing trusted boundaries with controlled broken-data fixtures and one
+canonical data-quality audit. No Phase 10, Phase 11, or Phase 12 release tag has
+been created yet.
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md)
@@ -426,6 +456,7 @@ created yet.
 - [`docs/feature_integration.md`](docs/feature_integration.md)
 - [`docs/airflow_orchestration.md`](docs/airflow_orchestration.md)
 - [`docs/kafka_device_events.md`](docs/kafka_device_events.md)
+- [`docs/data_quality_hardening.md`](docs/data_quality_hardening.md)
 - [`docs/process_optimization.md`](docs/process_optimization.md)
 - [`docs/data_model.md`](docs/data_model.md)
 - [`docs/database_schemas.md`](docs/database_schemas.md)
