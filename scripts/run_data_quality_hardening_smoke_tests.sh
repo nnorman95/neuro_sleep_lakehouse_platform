@@ -15,16 +15,21 @@ echo
 echo "Compile Phase 12 quality fixtures"
 python -m py_compile \
   src/neuro_sleep/quality/schema_drift_smoke.py \
-  src/neuro_sleep/quality/manifest_integrity_smoke.py
+  src/neuro_sleep/quality/manifest_integrity_smoke.py \
+  src/neuro_sleep/quality/publication_consistency_smoke.py
 echo "phase12_quality_python_compilation=success"
 echo
 
-echo "1/2 Check fail-closed Silver schema drift"
+echo "1/3 Check fail-closed Silver schema drift"
 python -m neuro_sleep.quality.schema_drift_smoke
 echo
 
-echo "2/2 Check fail-closed Silver manifest integrity"
+echo "2/3 Check fail-closed Silver manifest integrity"
 python -m neuro_sleep.quality.manifest_integrity_smoke
+echo
+
+echo "3/3 Check fail-closed Silver publication consistency"
+python -m neuro_sleep.quality.publication_consistency_smoke
 echo
 
 echo "phase12_quality_smoke_status=success"
