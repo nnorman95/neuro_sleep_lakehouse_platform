@@ -12,14 +12,19 @@ export PYTHONPATH="src${PYTHONPATH:+:$PYTHONPATH}"
 echo "Running Phase 12 data-quality hardening smoke tests..."
 echo
 
-echo "Compile Phase 12 quality fixture"
+echo "Compile Phase 12 quality fixtures"
 python -m py_compile \
-  src/neuro_sleep/quality/schema_drift_smoke.py
+  src/neuro_sleep/quality/schema_drift_smoke.py \
+  src/neuro_sleep/quality/manifest_integrity_smoke.py
 echo "phase12_quality_python_compilation=success"
 echo
 
-echo "1/1 Check fail-closed Silver schema drift"
+echo "1/2 Check fail-closed Silver schema drift"
 python -m neuro_sleep.quality.schema_drift_smoke
+echo
+
+echo "2/2 Check fail-closed Silver manifest integrity"
+python -m neuro_sleep.quality.manifest_integrity_smoke
 echo
 
 echo "phase12_quality_smoke_status=success"
