@@ -377,7 +377,7 @@ Implemented Phase 7 mart checks:
 - dataset-level recording counts and durations reconcile back to Warehouse metrics;
 - no arbitrary scientific `usable` threshold is introduced.
 
-The current full dbt build passes 257/257 executed model/test nodes: 14 models are defined in the project and 249 data tests are registered.
+The current full dbt build passes 301/301 executed model/test nodes: 15 models are defined in the project and 292 data tests are registered.
 
 ## 14. Future Quality Scope
 
@@ -385,10 +385,7 @@ Not implemented yet:
 
 - window-level signal-quality metrics such as missing ratio, noise score, or
   artifact score;
-- device-event quality rules;
-- Kafka ordering and duplicate-event checks;
 - Great Expectations integration;
-- intentionally broken-data fixture suite;
 - Gold feature-quality rules;
 
 These remain future scope and must not be represented as current datasets.
@@ -399,6 +396,8 @@ These remain future scope and must not be represented as current datasets.
 make smoke
 make reliability-smoke
 make silver-smoke
+make phase12-quality-smoke
+make phase12-check
 make test
 ./scripts/run_dbt.sh build
 ```
@@ -410,7 +409,9 @@ Core:          15/15
 Reliability:   17/17
 Silver:        26/26
 Python total:  58/58
-Full dbt:      257/257
+Full dbt:      301/301
+Phase 12 broken-data fixtures: 4/4
+Phase 12 audit:                 PASS
 ```
 
 ## 16. What Must Not Happen
@@ -470,7 +471,44 @@ Warehouse tests then validate the trusted inbox source and
 `warehouse.fact_device_event` grain, relationships, accepted values, and
 required fields.
 
-## 17. Current Status
+## 17. Phase 12 Broken-Data Fixtures
+
+Phase 12 adds controlled negative fixtures around existing trusted boundaries.
+The fixtures call the same validation functions used by production paths rather
+than maintaining parallel business rules.
+
+Implemented fixture groups:
+
+```text
+Silver schema drift:
+  missing column
+  unexpected column
+  wrong column type
+
+Silver manifest integrity:
+  file-size mismatch
+  SHA-256 mismatch
+  row-count mismatch
+
+Silver publication consistency:
+  foreign recording_id
+  duplicate channel_id
+  orphan interval reference
+  declared channel-count mismatch
+
+Subject-metadata identity:
+  duplicate subject_key
+  duplicate logical recording identity
+  missing subject reference
+  source_system mismatch
+  dataset_version mismatch
+```
+
+The complete Phase 12 audit runs these fixtures, the existing 26-test Silver
+regression, source compilation, and repository diff hygiene. A successful audit
+ends with `phase12_validation_status=success`.
+
+## 18. Current Status
 
 Implemented:
 
@@ -492,6 +530,8 @@ Warehouse + mart + device-event dbt contracts and regression: 301/301
 Kafka invalid-message quarantine and restart-safe offset handling
 Kafka late/out-of-order classification
 Interruption and failure cleanup tests
+Phase 12 controlled broken-data fixture suite
+Phase 12 canonical data-quality validation audit
 ```
 
 Next:
