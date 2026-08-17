@@ -234,6 +234,7 @@ make phase8-check
 make phase9-check
 make phase10-check
 make phase11-check
+make phase12-check
 ```
 
 `phase9-check` runs the normal smoke suites, full Spark feature validation,
@@ -266,6 +267,26 @@ make phase11-check
 ```
 
 See [`kafka_device_events.md`](kafka_device_events.md).
+
+### Phase 12 data-quality validation
+
+Run only the controlled broken-data fixture groups:
+
+```bash
+make phase12-quality-smoke
+```
+
+Run the complete Phase 12 audit:
+
+```bash
+make phase12-check
+```
+
+The complete audit performs source compilation, all four Phase 12 fixture groups,
+the existing 26-test Silver regression, and repository diff hygiene. The fixtures
+use temporary local data and do not modify trusted Bronze/Silver datasets.
+
+See [`data_quality_hardening.md`](data_quality_hardening.md).
 
 ## 10. Run Extract
 

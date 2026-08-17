@@ -193,6 +193,8 @@ make kafka-invalid-check
 make kafka-arrival-check
 make kafka-warehouse-check
 make phase11-check
+make phase12-quality-smoke
+make phase12-check
 ```
 
 This reduces the need to remember long combinations of Python module paths,
@@ -286,7 +288,27 @@ not depend on historical messages already retained in the topic.
 canonical final audit while still keeping each focused validator independently
 runnable.
 
-## 12. What is deliberately not optimized
+## 12. Phase 12 quality validation reuse
+
+Phase 12 improves failure confidence without adding a second validation stack.
+Four controlled fixture groups call the same validation functions used by the
+Silver and staging paths:
+
+```text
+schema drift
+manifest integrity
+publication consistency
+subject-metadata identity
+```
+
+`make phase12-quality-smoke` replaces manual execution of individual fixture
+modules. `make phase12-check` combines those negative tests with source
+compilation, the existing 26-test Silver regression, and diff hygiene.
+
+This reduces repeated manual validation work without weakening correctness,
+lineage, quarantine behavior, or observability.
+
+## 13. What is deliberately not optimized
 
 The project does not currently add:
 
@@ -301,7 +323,7 @@ These omissions are part of the optimization strategy: operational simplicity is
 preferred over infrastructure or tuning that does not solve a demonstrated
 problem.
 
-## 13. Evidence to preserve in later phases
+## 14. Evidence to preserve in later phases
 
 Later phases should continue recording evidence such as:
 
