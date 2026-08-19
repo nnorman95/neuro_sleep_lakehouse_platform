@@ -92,6 +92,68 @@ def update_pipeline_run_heartbeat(
 
 
 
+
+def _finish_pipeline_run(
+    run_id: RunId,
+    status: str,
+    rows_read: int,
+    rows_written: int,
+    files_processed: int,
+    records_quarantined: int,
+    error_message: str | None,
+) -> None:
+    with get_postgres_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                update ops.pipeline_run
+                set
+                    status = %s,
+                    finished_at = now(),
+                    rows_read = %s,
+                    rows_written = %s,
+                    files_processed = %s,
+                    records_quarantined = %s,
+                    error_message = %s
+                where run_id = %s
+                  and status = 'started';
+                """,
+                (
+                    status,
+                    rows_read,
+                    rows_written,
+                    files_processed,
+                    records_quarantined,
+                    error_message,
+                    run_id,
+                ),
+            )
+
+            if cursor.rowcount == 1:
+                return
+
+            cursor.execute(
+                """
+                select status
+                from ops.pipeline_run
+                where run_id = %s;
+                """,
+                (run_id,),
+            )
+            row = cursor.fetchone()
+
+            if row is None:
+                raise ValueError(
+                    f"Pipeline run not found: {run_id}"
+                )
+
+            raise RuntimeError(
+                "Pipeline run is already "
+                f"finished with status '{row[0]}': "
+                f"{run_id}"
+            )
+
+
 def finish_pipeline_run_success(
     run_id: RunId,
     rows_read: int = 0,
@@ -101,35 +163,24 @@ def finish_pipeline_run_success(
 ) -> None:
     _validate_non_negative("rows_read", rows_read)
     _validate_non_negative("rows_written", rows_written)
-    _validate_non_negative("files_processed", files_processed)
-    _validate_non_negative("records_quarantined", records_quarantined)
+    _validate_non_negative(
+        "files_processed",
+        files_processed,
+    )
+    _validate_non_negative(
+        "records_quarantined",
+        records_quarantined,
+    )
 
-    with get_postgres_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                update ops.pipeline_run
-                set
-                    status = 'success',
-                    finished_at = now(),
-                    rows_read = %s,
-                    rows_written = %s,
-                    files_processed = %s,
-                    records_quarantined = %s,
-                    error_message = null
-                where run_id = %s;
-                """,
-                (
-                    rows_read,
-                    rows_written,
-                    files_processed,
-                    records_quarantined,
-                    run_id,
-                ),
-            )
-
-            if cursor.rowcount != 1:
-                raise ValueError(f"Pipeline run not found: {run_id}")
+    _finish_pipeline_run(
+        run_id=run_id,
+        status="success",
+        rows_read=rows_read,
+        rows_written=rows_written,
+        files_processed=files_processed,
+        records_quarantined=records_quarantined,
+        error_message=None,
+    )
 
 
 def finish_pipeline_run_failed(
@@ -142,36 +193,25 @@ def finish_pipeline_run_failed(
 ) -> None:
     _validate_non_negative("rows_read", rows_read)
     _validate_non_negative("rows_written", rows_written)
-    _validate_non_negative("files_processed", files_processed)
-    _validate_non_negative("records_quarantined", records_quarantined)
+    _validate_non_negative(
+        "files_processed",
+        files_processed,
+    )
+    _validate_non_negative(
+        "records_quarantined",
+        records_quarantined,
+    )
 
-    with get_postgres_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                update ops.pipeline_run
-                set
-                    status = 'failed',
-                    finished_at = now(),
-                    rows_read = %s,
-                    rows_written = %s,
-                    files_processed = %s,
-                    records_quarantined = %s,
-                    error_message = %s
-                where run_id = %s;
-                """,
-                (
-                    rows_read,
-                    rows_written,
-                    files_processed,
-                    records_quarantined,
-                    error_message,
-                    run_id,
-                ),
-            )
+    _finish_pipeline_run(
+        run_id=run_id,
+        status="failed",
+        rows_read=rows_read,
+        rows_written=rows_written,
+        files_processed=files_processed,
+        records_quarantined=records_quarantined,
+        error_message=error_message,
+    )
 
-            if cursor.rowcount != 1:
-                raise ValueError(f"Pipeline run not found: {run_id}")
 
 def finish_pipeline_run_skipped(
     run_id: RunId,
@@ -183,36 +223,25 @@ def finish_pipeline_run_skipped(
 ) -> None:
     _validate_non_negative("rows_read", rows_read)
     _validate_non_negative("rows_written", rows_written)
-    _validate_non_negative("files_processed", files_processed)
-    _validate_non_negative("records_quarantined", records_quarantined)
+    _validate_non_negative(
+        "files_processed",
+        files_processed,
+    )
+    _validate_non_negative(
+        "records_quarantined",
+        records_quarantined,
+    )
 
-    with get_postgres_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                update ops.pipeline_run
-                set
-                    status = 'skipped',
-                    finished_at = now(),
-                    rows_read = %s,
-                    rows_written = %s,
-                    files_processed = %s,
-                    records_quarantined = %s,
-                    error_message = %s
-                where run_id = %s;
-                """,
-                (
-                    rows_read,
-                    rows_written,
-                    files_processed,
-                    records_quarantined,
-                    reason,
-                    run_id,
-                ),
-            )
+    _finish_pipeline_run(
+        run_id=run_id,
+        status="skipped",
+        rows_read=rows_read,
+        rows_written=rows_written,
+        files_processed=files_processed,
+        records_quarantined=records_quarantined,
+        error_message=reason,
+    )
 
-            if cursor.rowcount != 1:
-                raise ValueError(f"Pipeline run not found: {run_id}")
 
 def get_pipeline_run_status(
     run_id: RunId,
@@ -257,6 +286,7 @@ def get_pipeline_run_status(
             )
 
 
+
 def run_smoke_test() -> None:
     run_id = start_pipeline_run(
         pipeline_name="pipeline_run_smoke_test",
@@ -275,6 +305,18 @@ def run_smoke_test() -> None:
     )
 
     row = get_pipeline_run_status(run_id)
+
+    if (
+        row.status != "success"
+        or row.rows_read != 10
+        or row.rows_written != 10
+        or row.files_processed != 1
+        or row.records_quarantined != 0
+        or row.error_message is not None
+    ):
+        raise RuntimeError(
+            "Successful pipeline run state is incorrect"
+        )
 
     print(f"run_id={row.run_id}")
     print(
@@ -297,6 +339,78 @@ def run_smoke_test() -> None:
     print(
         f"error_message={row.error_message}"
     )
+
+    try:
+        finish_pipeline_run_failed(
+            run_id=run_id,
+            error_message=(
+                "Simulated terminal-state overwrite"
+            ),
+            rows_read=999,
+            rows_written=999,
+            files_processed=999,
+            records_quarantined=999,
+        )
+    except RuntimeError as error:
+        if (
+            "already finished with status 'success'"
+            not in str(error)
+        ):
+            raise
+        print(
+            "terminal_pipeline_run_failed_"
+            "transition_blocked=true"
+        )
+    else:
+        raise RuntimeError(
+            "Successful pipeline run was overwritten "
+            "with failed status"
+        )
+
+    try:
+        finish_pipeline_run_skipped(
+            run_id=run_id,
+            reason="Simulated terminal-state overwrite",
+            rows_read=888,
+            rows_written=888,
+            files_processed=888,
+            records_quarantined=888,
+        )
+    except RuntimeError as error:
+        if (
+            "already finished with status 'success'"
+            not in str(error)
+        ):
+            raise
+        print(
+            "terminal_pipeline_run_skipped_"
+            "transition_blocked=true"
+        )
+    else:
+        raise RuntimeError(
+            "Successful pipeline run was overwritten "
+            "with skipped status"
+        )
+
+    immutable_row = get_pipeline_run_status(
+        run_id
+    )
+
+    if (
+        immutable_row.status != "success"
+        or immutable_row.rows_read != 10
+        or immutable_row.rows_written != 10
+        or immutable_row.files_processed != 1
+        or immutable_row.records_quarantined != 0
+        or immutable_row.error_message is not None
+    ):
+        raise RuntimeError(
+            "Terminal pipeline run state changed "
+            "after rejected transition"
+        )
+
+    print("terminal_pipeline_run_immutable=true")
+    print("pipeline_run_smoke_status=success")
 
 
 if __name__ == "__main__":
