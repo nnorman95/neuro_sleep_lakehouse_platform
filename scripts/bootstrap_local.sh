@@ -10,23 +10,31 @@ cd "$PROJECT_ROOT"
 echo "Bootstrapping NeuroSleep local environment..."
 echo
 
-echo "1/7 Checking host prerequisites"
+echo "1/8 Checking host prerequisites"
 ./scripts/check_local_prerequisites.sh
 echo
 
-echo "2/7 Preparing local environment"
+echo "2/8 Preparing local environment"
 ./scripts/initialize_local_env.sh
+echo
+
+echo "3/8 Preparing Python environment"
+./scripts/ensure_python_environment.sh
+export VIRTUAL_ENV="$PROJECT_ROOT/.venv"
+export PATH="$VIRTUAL_ENV/bin:$PATH"
+hash -r
+echo "bootstrap_python=$(command -v python)"
 echo
 
 set -a
 source .env
 set +a
 
-echo "3/7 Starting core Docker services"
+echo "4/8 Starting core Docker services"
 docker compose up -d postgres minio
 echo
 
-echo "4/7 Waiting for core services"
+echo "5/8 Waiting for core services"
 postgres_ready=false
 for _ in $(seq 1 60); do
   if docker compose exec -T postgres \
@@ -68,15 +76,15 @@ fi
 echo "minio_ready=true"
 echo
 
-echo "5/7 Initializing MinIO buckets"
+echo "6/8 Initializing MinIO buckets"
 ./scripts/init_minio_buckets.sh
 echo
 
-echo "6/7 Running SQL migrations and seeds"
+echo "7/8 Running SQL migrations and seeds"
 ./scripts/run_sql_migrations.sh
 echo
 
-echo "7/7 Running core platform smoke tests"
+echo "8/8 Running core platform smoke tests"
 ./scripts/run_smoke_tests.sh
 echo
 
