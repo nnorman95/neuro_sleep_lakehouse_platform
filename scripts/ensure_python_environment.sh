@@ -10,6 +10,18 @@ cd "$PROJECT_ROOT"
 VENV_DIR="${NEUROSLEEP_VENV_DIR:-$PROJECT_ROOT/.venv}"
 FINGERPRINT_FILE="$VENV_DIR/.neurosleep_dependency_fingerprint"
 
+normalize_macos_venv_flags() {
+  if [[ "$(uname -s)" == "Darwin" ]] \
+    && command -v chflags >/dev/null 2>&1
+  then
+    chflags -R nohidden "$VENV_DIR"
+    echo "python_env_macos_venv_flags=normalized"
+    return 0
+  fi
+
+  echo "python_env_macos_venv_flags=not_applicable"
+}
+
 bootstrap_python=""
 if command -v python3 >/dev/null 2>&1; then
   bootstrap_python="python3"
@@ -35,6 +47,8 @@ if [[ ! -x "$VENV_PYTHON" ]]; then
   echo "Remove it and run make python-env again." >&2
   exit 1
 fi
+
+normalize_macos_venv_flags
 
 python_version="$(
   "$VENV_PYTHON" -c \
@@ -124,6 +138,8 @@ then
 
   printf '%s\n' "$current_fingerprint" \
     > "$FINGERPRINT_FILE"
+
+  normalize_macos_venv_flags
 
   dependencies_installed=true
 else
