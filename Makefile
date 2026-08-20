@@ -11,7 +11,7 @@ help:
 	@echo "make platform-up        Start the initialized full local platform"
 	@echo "make platform-status    Check full local platform readiness"
 	@echo "make platform-down      Stop the full local platform safely"
-	@echo "make bootstrap          Bootstrap the local platform"
+	@echo "make bootstrap          Bootstrap the complete platform from a fresh checkout"
 	@echo "make buckets            Initialize MinIO buckets"
 	@echo "make migrate            Run SQL migrations and seeds"
 	@echo "make smoke              Run core platform smoke tests"
