@@ -28,47 +28,153 @@ Kafka host port 9092
 confluent-kafka 2.15.0
 ```
 
-## 2. Project Location
+## 2. Fresh Checkout
 
-Current local path:
+Clone the repository and enter it:
+
+```bash
+git clone https://github.com/nnorman95/neuro_sleep_lakehouse_platform.git
+cd neuro_sleep_lakehouse_platform
+```
+
+Do not copy `.env.example` manually and do not create `.venv` manually for the
+normal setup path. The project bootstrap owns those steps so that the same setup
+logic is used on every machine.
+
+## 3. Check Host Prerequisites
+
+Run the read-only doctor before bootstrap:
+
+```bash
+make doctor
+```
+
+It checks Git, Make, curl, Docker, Docker Compose v2, Python 3.11+, Java 21,
+required repository files, Compose resolution, and the Python dependency
+contract.
+
+The command does not create containers, files, databases, or buckets.
+
+## 4. Complete First-Time Bootstrap
+
+Run:
+
+```bash
+make bootstrap
+```
+
+The complete bootstrap is rerunnable and performs the local initialization in a
+controlled order:
 
 ```text
-/Users/norman/Documents/S/Data Engineering/neuro_sleep_lakehouse_platform
+host prerequisite checks
+        |
+        v
+safe .env initialization
+        |
+        v
+reproducible .venv + project dependencies
+        |
+        v
+PostgreSQL + MinIO + Kafka
+        |
+        v
+MinIO buckets + SQL migrations/seeds + core smoke tests
+        |
+        v
+Kafka topic initialization
+        |
+        v
+Airflow metadata DB + runtime image + migrations
+        |
+        v
+Airflow scheduler + DAG processor + API server
+        |
+        v
+full platform readiness check
 ```
 
-Enter the project:
+On an existing environment, completed setup work is reused where safe. For
+example, an existing Airflow runtime image is not rebuilt on every bootstrap.
+
+The bootstrap creates `.env` safely from `.env.example` when `.env` does not
+exist. Existing configured `.env` files are preserved. Existing files with
+missing, empty, or placeholder credentials fail closed instead of being silently
+rewritten.
+
+The Python environment is also managed by bootstrap. It creates `.venv` when
+needed, installs the project in editable mode, validates the dependency contract,
+and skips dependency installation while the dependency fingerprint is unchanged.
+
+## 5. Run the Compact End-to-End Demo
+
+After bootstrap:
 
 ```bash
-cd "/Users/norman/Documents/S/Data Engineering/neuro_sleep_lakehouse_platform"
+make demo
 ```
 
-## 3. Python Environment
+The demo uses one deterministic Sleep-EDF recording (`SC4001E`) and runs:
+
+```text
+PhysioNet
+  -> Bronze
+  -> Silver metadata + signals
+  -> PostgreSQL staging
+  -> dbt Warehouse + marts
+  -> Spark Gold signal features
+  -> Gold validation
+```
+
+The demo intentionally avoids the full high-volume dataset. Existing immutable
+Bronze/Silver/Gold publications are reused on rerun.
+
+Override the default recording only when a different compatible recording is
+already intended:
 
 ```bash
-cp .env.example .env
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+DEMO_RECORDING_KEY=SC4002E make demo
 ```
 
-Most direct Python commands use:
+## 6. Daily Local Lifecycle
+
+After the machine has been bootstrapped, normal local operation uses:
 
 ```bash
-PYTHONPATH=src
+make platform-up
+make platform-status
+make platform-down
 ```
 
-## 4. Start Local Services
+`make platform-up` starts PostgreSQL, MinIO, Kafka, and the three Airflow
+services, ensures the Kafka topic contract, and waits for readiness.
+
+`make platform-status` is read-only and reports the readiness of PostgreSQL,
+MinIO, Kafka, the Airflow scheduler, Airflow API server, and Airflow DAG
+processor.
+
+`make platform-down` stops those services without deleting persistent Docker
+volumes.
+
+Operational state can be summarized separately with:
+
+```bash
+make ops-status
+```
+
+## 7. Focused Component Commands
+
+The unified lifecycle is the normal path. Lower-level commands remain available
+for focused development and recovery.
+
+### PostgreSQL and MinIO
 
 ```bash
 make up
 make ps
-```
-
-Equivalent Docker commands:
-
-```bash
-docker compose up -d postgres minio
-docker compose ps
+make buckets
+make migrate
+make psql
 ```
 
 Required MinIO buckets:
@@ -81,15 +187,7 @@ quarantine
 logs
 ```
 
-Initialize them with:
-
-```bash
-make buckets
-```
-
-### Kafka runtime
-
-Kafka is deliberately separate from the base `make up` command.
+### Kafka
 
 ```bash
 make kafka-up
@@ -97,72 +195,14 @@ make kafka-init
 make kafka-topic-check
 ```
 
-The local host bootstrap is:
+The local host bootstrap is `localhost:9092`; the Docker-network listener is
+`kafka:19092`. Automatic topic creation is disabled. The application topic is
+created and validated from its version-controlled contract.
 
-```text
-localhost:9092
-```
-
-The Docker-network listener is:
-
-```text
-kafka:19092
-```
-
-Automatic topic creation is disabled. The application topic is created and
-validated from its version-controlled topic contract.
-
-## 5. Database Initialization
-
-Run all migrations and idempotent seeds registered in the manifest:
-
-```bash
-make migrate
-```
-
-Open PostgreSQL:
-
-```bash
-make psql
-```
-
-Exit with:
-
-```text
-\q
-```
-
-## 6. Bootstrap
-
-For a new local environment:
-
-```bash
-make bootstrap
-```
-
-Bootstrap starts PostgreSQL and MinIO, initializes buckets, runs SQL migrations
-and seeds, and runs the core smoke suite.
-
-## 7. Airflow Runtime and Bootstrap
-
-Airflow runs in separate containers with a custom project execution image. The
-image is built locally from the pinned upstream Airflow base image and contains
-the project code, Java 17, PySpark, and dbt required by the DAG tasks.
-
-Initialize or refresh the local Airflow runtime with:
+### Airflow
 
 ```bash
 make airflow-bootstrap
-```
-
-The bootstrap is rerunnable. It ensures Airflow environment values, initializes
-the Airflow metadata database, builds and validates `neurosleep-airflow:phase10`,
-prepares the state volume, runs metadata migrations, and starts the scheduler,
-DAG processor, and API server.
-
-Useful Airflow commands:
-
-```bash
 make airflow-up
 make airflow-down
 make airflow-ps
@@ -170,17 +210,13 @@ make airflow-smoke
 make airflow-password
 ```
 
-Airflow is available on port `8080`. The containers use service-network addresses
-for project dependencies:
+Airflow is available on port `8080`. Containers use `postgres:5432` and
+`http://minio:9000` inside the Compose network, while host commands continue to
+use `localhost:5433` and `localhost:9000`.
 
-```text
-PostgreSQL: postgres:5432
-MinIO:      http://minio:9000
-```
-
-The host workflow continues using `localhost:5433` and `localhost:9000`.
-`.env` is not copied into the Airflow image; Compose injects the container runtime
-configuration.
+`make airflow-bootstrap` remains available for focused Airflow initialization or
+repair. Normal fresh-machine setup should use `make bootstrap`, which includes
+the Airflow bootstrap.
 
 See [`airflow_orchestration.md`](airflow_orchestration.md).
 
