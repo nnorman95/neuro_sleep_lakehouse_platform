@@ -28,6 +28,11 @@ Kafka host port 9092
 confluent-kafka 2.15.0
 ```
 
+All host-published development endpoints bind to `127.0.0.1` by default through
+`LOCAL_BIND_ADDRESS`. This keeps PostgreSQL, MinIO, Kafka, and Airflow reachable
+from the local machine without exposing them to the surrounding LAN. Change the
+bind address only when remote access is intentional and separately secured.
+
 ## 2. Fresh Checkout
 
 Clone the repository and enter it:
@@ -155,6 +160,10 @@ processor.
 
 `make platform-down` stops those services without deleting persistent Docker
 volumes.
+
+Published host ports remain loopback-only by default. Docker-internal service
+communication continues to use Compose service names such as `postgres`,
+`minio`, and `kafka`; the loopback binding affects only access from the host.
 
 Operational state can be summarized separately with:
 
