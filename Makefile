@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check ops-status ops-status-smoke doctor env-init python-env platform-up platform-status platform-down
+.PHONY: help up down ps bootstrap demo buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check ops-status ops-status-smoke doctor env-init python-env platform-up platform-status platform-down
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -12,6 +12,7 @@ help:
 	@echo "make platform-status    Check full local platform readiness"
 	@echo "make platform-down      Stop the full local platform safely"
 	@echo "make bootstrap          Bootstrap the complete platform from a fresh checkout"
+	@echo "make demo               Run a compact one-recording batch + Gold demo"
 	@echo "make buckets            Initialize MinIO buckets"
 	@echo "make migrate            Run SQL migrations and seeds"
 	@echo "make smoke              Run core platform smoke tests"
@@ -89,6 +90,9 @@ platform-down:
 
 bootstrap:
 	./scripts/bootstrap_local.sh
+
+demo:
+	./scripts/run_local_demo.sh
 
 buckets:
 	./scripts/init_minio_buckets.sh
