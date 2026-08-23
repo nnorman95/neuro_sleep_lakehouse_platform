@@ -326,8 +326,14 @@ make silver-smoke
 make spark-smoke
 make gold-reliability-smoke
 make integrated-gold-reliability-smoke
+make batch-check
 make test
 ```
+
+`make batch-check` is the aggregate for the core batch smoke bundle shown
+above. `make test` is retained as a compatibility alias for that bundle; it
+does not claim to include Kafka, Airflow, Phase 12, or every high-volume
+feature regression.
 
 High-volume feature and Gold checks are explicit:
 
