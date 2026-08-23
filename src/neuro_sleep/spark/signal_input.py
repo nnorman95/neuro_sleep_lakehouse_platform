@@ -8,7 +8,7 @@ from botocore.client import BaseClient
 from neuro_sleep.config import Settings, get_settings
 from neuro_sleep.db.postgres import get_postgres_connection
 from neuro_sleep.silver.idempotency import read_success_manifest
-from neuro_sleep.spark.recording_scope import (
+from neuro_sleep.recording_scope import (
     select_recording_scope,
 )
 from neuro_sleep.storage.object_storage import (

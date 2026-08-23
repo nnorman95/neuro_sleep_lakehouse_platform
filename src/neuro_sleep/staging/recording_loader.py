@@ -17,6 +17,9 @@ from neuro_sleep.config import (
 from neuro_sleep.db.postgres import (
     get_postgres_connection,
 )
+from neuro_sleep.recording_scope import (
+    select_recording_scope,
+)
 from neuro_sleep.reliability.object_storage_retry import (
     run_object_storage_operation,
 )
@@ -705,6 +708,15 @@ def discover_current_recording_publications(
             by_logical_identity[
                 logical_identity
             ] = publication
+
+        publications = list(
+            select_recording_scope(
+                publications,
+                settings.sleep_edf_recording_keys,
+                key=lambda item: item.recording_key,
+                scope_name="SLEEP_EDF_RECORDING_KEYS",
+            )
+        )
 
         return tuple(
             sorted(

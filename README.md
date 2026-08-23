@@ -408,6 +408,7 @@ available for focused development, validation, and recovery:
 ```bash
 make help
 make ops-status
+make backfill RECORDING_KEY=SC4001E
 make smoke
 make reliability-smoke
 make silver-smoke
