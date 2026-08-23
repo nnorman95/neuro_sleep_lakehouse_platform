@@ -28,7 +28,7 @@ export SLEEP_EDF_INCLUDE_TELEMETRY=false
 export SLEEP_EDF_INCLUDE_METADATA=true
 export SLEEP_EDF_RECORDING_KEYS="$demo_recording_key"
 export SILVER_INCLUDE_SIGNALS=true
-export SPARK_SIGNAL_RECORDING_KEYS="$demo_recording_key"
+export SIGNAL_FEATURE_RECORDING_KEYS="$demo_recording_key"
 
 echo "Running NeuroSleep compact local demo..."
 echo "demo_recording_key=$demo_recording_key"
