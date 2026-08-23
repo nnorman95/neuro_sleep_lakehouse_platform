@@ -319,6 +319,19 @@ More detail is in
 
 ## Validation
 
+GitHub Actions runs a lightweight repository-contract workflow on pushes and
+pull requests. The same checks can be reproduced locally without Docker,
+PostgreSQL, MinIO, Kafka, Airflow, Spark execution, or the full signal dataset:
+
+```bash
+make ci-check
+```
+
+This fast CI validates the Python/dependency contract, SQL migration manifest,
+Python syntax, shell syntax, the pure recording-scope regression, and repository
+hygiene. Runtime and high-volume integration suites remain explicit local
+checks; CI does not duplicate the existing Docker/Spark/Airflow regressions.
+
 Current verified regression status:
 
 ```text
@@ -410,6 +423,7 @@ make help
 make ops-status
 make backfill RECORDING_KEY=SC4001E
 make migration-history-check
+make ci-check
 make smoke
 make reliability-smoke
 make silver-smoke
