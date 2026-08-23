@@ -20,7 +20,8 @@ identity defects.
 Phase 13 adds **Operational Hardening and Process Optimization**: repository
 prerequisite checks, safe environment initialization, reproducible Python setup,
 a unified local platform lifecycle, full clean-machine bootstrap, operational
-health reporting, and a compact one-recording end-to-end demo path.
+health reporting, compact demo and targeted backfill paths, tracked SQL
+migration history, and lightweight GitHub CI.
 
 ## Current state
 
@@ -331,6 +332,9 @@ This fast CI validates the Python/dependency contract, SQL migration manifest,
 Python syntax, shell syntax, the pure recording-scope regression, and repository
 hygiene. Runtime and high-volume integration suites remain explicit local
 checks; CI does not duplicate the existing Docker/Spark/Airflow regressions.
+`make batch-check` is the named aggregate for the core batch smoke bundle;
+`make test` remains a compatibility alias rather than implying every project
+regression is included.
 
 Current verified regression status:
 
@@ -451,6 +455,7 @@ make phase9-check
 make phase10-check
 make phase11-check
 make phase12-check
+make batch-check
 make test
 make source-check
 make psql

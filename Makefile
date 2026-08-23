@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap demo backfill buckets migrate migration-history-check ci-check smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check ops-status ops-status-smoke doctor env-init python-env platform-up platform-status platform-down
+.PHONY: help up down ps bootstrap demo backfill buckets migrate migration-history-check ci-check smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check batch-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check ops-status ops-status-smoke doctor env-init python-env platform-up platform-status platform-down
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -18,6 +18,7 @@ help:
 	@echo "make migrate            Run tracked SQL migrations and seeds"
 	@echo "make migration-history-check Validate migration history and checksum drift"
 	@echo "make ci-check           Run lightweight repository CI contracts"
+	@echo "make batch-check        Run core batch smoke bundle"
 	@echo "make smoke              Run core platform smoke tests"
 	@echo "make reliability-smoke  Run reliability and failure tests"
 	@echo "make silver-smoke       Run Silver-layer smoke tests"
@@ -60,7 +61,7 @@ help:
 	@echo "make airflow-ps           Show Airflow service status"
 	@echo "make airflow-smoke        Run Airflow foundation smoke checks"
 	@echo "make airflow-password     Show local Airflow admin password"
-	@echo "make test               Run all test suites"
+	@echo "make test               Alias for make batch-check"
 	@echo "make source-check       Check Sleep-EDF source configuration"
 	@echo "make psql               Open PostgreSQL psql shell"
 	@echo "make clean-pycache      Remove Python cache folders"
@@ -155,7 +156,9 @@ phase9-check:
 phase10-check:
 	./scripts/validate_phase10.sh
 
-test: smoke reliability-smoke silver-smoke spark-smoke gold-reliability-smoke integrated-gold-reliability-smoke
+batch-check: smoke reliability-smoke silver-smoke spark-smoke gold-reliability-smoke integrated-gold-reliability-smoke
+
+test: batch-check
 
 source-check:
 	PYTHONPATH=src python -m neuro_sleep.sources.sleep_edf

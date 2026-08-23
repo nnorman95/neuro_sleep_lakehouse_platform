@@ -13,7 +13,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 echo "Running NeuroSleep lightweight CI checks..."
 echo
 
-echo "1/7 Check Python runtime"
+echo "1/8 Check Python runtime"
 python - <<'PY'
 import sys
 
@@ -31,17 +31,21 @@ print("ci_python_runtime=success")
 PY
 echo
 
-echo "2/7 Validate dependency contract"
+echo "2/8 Validate dependency contract"
 python scripts/validate_dependency_contract.py
 echo "ci_dependency_contract=success"
 echo
+echo "3/8 Validate command/config contract"
+python scripts/validate_command_config_contract.py
+echo "ci_command_config_contract=success"
+echo
 
-echo "3/7 Validate SQL manifest contract"
+echo "4/8 Validate SQL manifest contract"
 python scripts/validate_sql_manifest_contract.py
 echo "ci_sql_manifest_contract=success"
 echo
 
-echo "4/7 Compile Python sources"
+echo "5/8 Compile Python sources"
 PYTHONPYCACHEPREFIX="$tmp_dir/pycache" \
   python -m compileall -q \
     src \
@@ -50,7 +54,7 @@ PYTHONPYCACHEPREFIX="$tmp_dir/pycache" \
 echo "ci_python_compile=success"
 echo
 
-echo "5/7 Validate shell syntax"
+echo "6/8 Validate shell syntax"
 shell_count=0
 while IFS= read -r -d '' script; do
   bash -n "$script"
@@ -71,13 +75,13 @@ echo "ci_shell_scripts_checked=$shell_count"
 echo "ci_shell_syntax=success"
 echo
 
-echo "6/7 Run pure recording-scope regression"
+echo "7/8 Run pure recording-scope regression"
 PYTHONPATH=src \
   python -m neuro_sleep.spark.recording_scope_smoke
 echo "ci_recording_scope_regression=success"
 echo
 
-echo "7/7 Check repository hygiene"
+echo "8/8 Check repository hygiene"
 if git ls-files --error-unmatch .env >/dev/null 2>&1; then
   echo "ERROR: .env must not be tracked." >&2
   exit 1
