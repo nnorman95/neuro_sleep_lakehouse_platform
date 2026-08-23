@@ -352,6 +352,7 @@ make phase9-check
 make phase10-check
 make phase11-check
 make phase12-check
+make phase13-check
 ```
 
 `phase9-check` runs the normal smoke suites, full Spark feature validation,
@@ -404,6 +405,25 @@ the existing 26-test Silver regression, and repository diff hygiene. The fixture
 use temporary local data and do not modify trusted Bronze/Silver datasets.
 
 See [`data_quality_hardening.md`](data_quality_hardening.md).
+
+### Phase 13 operational validation
+
+Run the complete Phase 13 boundary audit only after the full local platform is
+initialized and ready:
+
+```bash
+make phase13-check
+```
+
+This is intentionally a phase-boundary regression rather than a quick daily
+check. It validates the local doctor, lightweight CI contracts, full platform
+readiness, operational-health classification, SQL migration-history behavior,
+the compact demo, targeted recording backfill, the complete Phase 10 regression,
+the complete Phase 11 Kafka audit, the complete Phase 12 data-quality audit, and
+repository diff hygiene.
+
+For normal development, use the focused commands instead of repeatedly running
+the full Phase 13 audit.
 
 ## 10. Run Extract
 

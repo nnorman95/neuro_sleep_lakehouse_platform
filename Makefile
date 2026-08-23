@@ -1,4 +1,4 @@
-.PHONY: help up down ps bootstrap demo backfill buckets migrate migration-history-check ci-check smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check batch-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check ops-status ops-status-smoke doctor env-init python-env platform-up platform-status platform-down
+.PHONY: help up down ps bootstrap demo backfill buckets migrate migration-history-check ci-check smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check batch-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check phase13-check ops-status ops-status-smoke doctor env-init python-env platform-up platform-status platform-down
 help:
 	@echo "NeuroSleep local commands"
 	@echo
@@ -52,6 +52,7 @@ help:
 	@echo "make phase11-check        Run complete Phase 11 Kafka audit"
 	@echo "make phase12-quality-smoke Run Phase 12 broken-data quality fixtures"
 	@echo "make phase12-check        Run complete Phase 12 data-quality audit"
+	@echo "make phase13-check        Run complete Phase 13 operational audit"
 	@echo "make ops-status           Show read-only operational health summary"
 	@echo "make ops-status-smoke     Validate operational health classification"
 	@echo "make kafka-smoke          Validate Kafka runtime"
@@ -221,6 +222,9 @@ phase12-quality-smoke:
 
 phase12-check:
 	./scripts/validate_phase12_data_quality_hardening.sh
+
+phase13-check:
+	./scripts/validate_phase13_operational_hardening.sh
 
 ops-status:
 	PYTHONPATH=src python -m neuro_sleep.ops.operational_health
