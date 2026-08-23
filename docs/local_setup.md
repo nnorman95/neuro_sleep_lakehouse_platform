@@ -206,8 +206,23 @@ make up
 make ps
 make buckets
 make migrate
+make migration-history-check
 make psql
 ```
+
+`make migrate` tracks every manifest entry in `ops.sql_migration_history`
+using its repository path and SHA-256 checksum. The first run after this
+history mechanism is introduced executes the current manifest once and
+records its baseline checksums. Later runs skip unchanged registered files
+and execute only new manifest entries.
+
+Applied migration and seed files are immutable. If the checksum of a
+registered file changes, migration execution fails closed before any pending
+SQL file is applied. Schema or seed changes must therefore be added as a new
+numbered SQL file instead of editing an already registered file.
+
+`make migration-history-check` validates first-run registration, idempotent
+reruns, and checksum-drift rejection in a temporary PostgreSQL database.
 
 Required MinIO buckets:
 
