@@ -302,6 +302,21 @@ DATA_PROFILE=full
 
 ## 9. Validation
 
+The fast repository-contract suite is:
+
+```bash
+make ci-check
+```
+
+The same command runs in `.github/workflows/ci.yml` on GitHub pushes and pull
+requests. It intentionally requires no project services and does not download or
+process Sleep-EDF signal data. It checks dependency alignment, SQL manifest
+integrity, Python compilation, shell syntax, the pure recording-scope regression,
+and repository hygiene.
+
+Docker-backed, database-backed, Kafka, Airflow, and high-volume Spark checks stay
+in the explicit local suites below.
+
 Common suites:
 
 ```bash
