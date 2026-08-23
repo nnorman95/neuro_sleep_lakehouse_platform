@@ -20,7 +20,7 @@ uses Python 3.13.5.
 | `staging` | relational landing area for selected Silver datasets | subject and recording loaders implemented |
 | `warehouse` | dimensional analytical models | Warehouse Core plus Phase 11 device-event fact implemented through dbt |
 | `mart` | consumption-ready relational models | three Phase 7 dbt marts implemented |
-| `ops` | pipeline execution, file-attempt history, and durable Kafka inbox | implemented |
+| `ops` | pipeline execution, file-attempt history, Kafka inbox, and SQL migration history | implemented |
 | `quality` | quarantine and durable quality history | implemented |
 | `governance` | source registry, contracts, and classification | implemented |
 
@@ -136,6 +136,24 @@ arrival quality:
 `event_id` is the business deduplication key. An identical replay refreshes
 delivery metadata without creating a second row. Different canonical event
 content under the same `event_id` fails closed.
+
+### `ops.sql_migration_history`
+
+Grain: one applied SQL manifest path.
+
+Implemented by migration `047_create_ops_sql_migration_history.sql`.
+
+Important columns:
+
+```text
+migration_path
+checksum_sha256
+applied_at
+```
+
+The migration path is the primary key. The SHA-256 checksum makes applied
+migration and seed files immutable under the project runner: checksum drift
+fails closed before pending SQL is applied.
 
 ## 4. Implemented Raw Table
 
@@ -518,6 +536,7 @@ The current manifest includes:
 044_add_kafka_device_event_arrival_classification.sql
 045_seed_data_contract_registry_warehouse_fact_device_event.sql
 046_seed_column_classification_warehouse_fact_device_event.sql
+047_create_ops_sql_migration_history.sql
 ```
 
 Seeds `039` and `040` register the five original Warehouse Core v1 contracts
@@ -526,8 +545,11 @@ quarantine identity index, and seed `042` activates the v2 quarantine contract.
 Migrations `043` and `044` implement the durable Kafka inbox and arrival
 classification. Seeds `045` and `046` register
 `warehouse.fact_device_event` and classify its 27 columns, bringing Warehouse
-classification coverage to 108 physical columns. Warehouse and mart table
-creation remains owned by dbt, not by the migration manifest.
+classification coverage to 108 physical columns. Migration `047` adds tracked
+SQL execution history. The current manifest contains 46 entries. After the
+migration-history baseline is initialized, all 46 are registered by path and
+checksum; unchanged reruns skip all 46 after verification. Warehouse and mart
+table creation remains owned by dbt, not by the migration manifest.
 
 ## 13. Migration Rules
 

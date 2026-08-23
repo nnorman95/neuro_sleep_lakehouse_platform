@@ -320,15 +320,15 @@ are meant to be combined.
 The current dbt project contains:
 
 ```text
-14 models
-249 data tests
-257 executed model/test nodes in a full build
+15 models
+292 data tests
+301 executed model/test nodes in a full build
 ```
 
 Current full build result:
 
 ```text
-PASS=257
+PASS=301
 WARN=0
 ERROR=0
 SKIP=0
@@ -371,9 +371,10 @@ The marts are descriptive engineering outputs. They should not be presented as:
 - statistically representative population results;
 - scientific recording-quality classifications.
 
-## 14. What comes next
+## 14. Downstream relationship
 
-Phase 7 intentionally stops before high-volume signal feature engineering. The
-next analytical step can read signal Parquet from MinIO, compute compact
-window/recording features with a high-volume processing engine, and publish only
-versioned features that have a defined grain and lineage.
+These marts remain the relational descriptive layer. High-volume signal feature
+engineering is implemented separately in Phase 8, and Phase 9 joins those Gold
+features to Warehouse context without changing the mart grains documented here.
+See [`spark_signal_features.md`](spark_signal_features.md) and
+[`feature_integration.md`](feature_integration.md).

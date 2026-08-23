@@ -207,22 +207,19 @@ The second unchanged run completed the Gold signal-feature task in about 6.5
 seconds versus about 135 seconds on the first run, consistent with the existing
 idempotent publication skip path.
 
-After the repeated Airflow runs, the full Phase 9 regression passed again,
-including:
+At original Phase 10 completion, the repeated Airflow runs were followed by a
+green Phase 9 regression. The dbt project at that point executed 257 model/test
+nodes. The Phase 10 regression was rerun at the v1.0.0 release boundary against
+the current project and passed again with the current dbt build.
+
+Current release-boundary evidence:
 
 ```text
-Silver idempotency:              PASS
-duplicate Silver object keys:    false
 Spark row reconciliation:        116,242,840 / 116,242,840
 Gold validation:                 83,909 rows
 Integrated Gold validation:      83,909 rows
-dbt build:                       257/257 PASS, 0 WARN, 0 ERROR
-```
-
-The final Phase 10 regression also completed with:
-
-```text
-phase10_regression_status=success
+dbt build:                       301/301 PASS, 0 WARN, 0 ERROR
+phase10_regression_status:       success
 ```
 
 ## 9. Operational commands
@@ -237,6 +234,5 @@ make airflow-password
 make phase10-check
 ```
 
-The main DAG is not scheduled automatically yet. This is deliberate: scheduling
-policy should be introduced only when the desired cadence and operational need
-are explicit.
+The main DAG intentionally uses `schedule=None` in v1.0.0. A recurring cadence
+is not assumed without an explicit operational requirement.

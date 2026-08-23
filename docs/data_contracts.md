@@ -231,16 +231,16 @@ Every important relational contract should state:
 
 ## 8. Warehouse and Mart Contract Work
 
-The subject-aware staging contracts are implemented and registered as active
-v1 contracts:
+The subject-aware staging contracts are implemented and registered as active v1
+contracts:
 
 ```text
 staging.silver_subjects
 staging.silver_recording_contexts
 ```
 
-The five Warehouse Core YAML contracts are also implemented and registered as
-active v1 contracts:
+The five original Warehouse Core contracts plus the Phase 11 device-event fact
+contract are implemented and registered as six active v1 Warehouse contracts:
 
 ```text
 warehouse.dim_subject
@@ -248,12 +248,12 @@ warehouse.dim_recording
 warehouse.dim_channel
 warehouse.dim_sleep_stage
 warehouse.fact_sleep_epoch
+warehouse.fact_device_event
 ```
 
-All 81 physical Warehouse columns have matching governance classifications.
-The dbt Warehouse models separately use enforced model contracts and schema/data
-tests; the YAML registry contracts remain the version-controlled governance
-record.
+All 108 physical Warehouse columns have matching governance classifications. The
+dbt Warehouse models separately use enforced model contracts and schema/data
+tests; the registry contracts remain the version-controlled governance record.
 
 Phase 7 marts also use enforced dbt model contracts in:
 
@@ -262,12 +262,13 @@ dbt/models/marts/marts.yml
 ```
 
 Those contracts cover the physical mart columns and types used during dbt builds.
-Separate registry-backed mart governance contracts/classifications are not added
-yet; they belong with the later access/BI rollout before broader consumption is
+Separate registry-backed mart governance contracts/classifications are outside
+the v1.0.0 scope. They are required before broader BI or external consumption is
 enabled.
 
-Do not create contracts for `fact_signal_quality` or device-event models until
-trusted upstream datasets and exact grains exist.
+Do not add a `fact_signal_quality` contract until a trusted upstream
+signal-quality dataset and exact analytical grain exist. The Phase 11 device-event
+contract is already implemented for the Kafka path.
 
 ## 9. Privacy Boundary
 
@@ -296,15 +297,15 @@ Implemented:
 - versioned staging recording and interval contracts;
 - active Silver recording v3 contract with explicit logical identity;
 - active subject/context staging contracts;
-- five active Warehouse Core v1 governance contracts;
-- Warehouse column classification for all 81 physical columns;
+- six active Warehouse v1 governance contracts, including `warehouse.fact_device_event`;
+- Warehouse column classification for all 108 physical columns;
 - enforced dbt model contracts plus Warehouse relationship/reconciliation tests;
 - enforced dbt contracts for the three Phase 7 marts;
 - explicit Silver Parquet schemas;
 - code- and manifest-enforced Gold signal-feature v1 contract;
 - code- and manifest-enforced integrated Gold feature v1 contract.
 
-Not implemented yet:
+Outside the v1.0.0 contract scope:
 
-- contracts for deferred signal-quality/device-event facts;
-- registry-backed mart governance contracts/classifications for broader access;
+- a `warehouse.fact_signal_quality` contract before a trusted upstream dataset exists;
+- registry-backed mart governance contracts/classifications for broader access.

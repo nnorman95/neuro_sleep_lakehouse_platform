@@ -279,7 +279,5 @@ make phase9-check
 
 Phase 9 ends with a validated, versioned analytical feature dataset combining
 signal statistics with subject, recording, channel, and optional sleep-stage
-context.
-
-Scheduling and dependency orchestration are intentionally left to the next
-phase.
+context. Phase 10 subsequently added Airflow orchestration around the existing
+entrypoints; it did not change the Phase 9 feature grain or publication contract.

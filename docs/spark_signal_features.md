@@ -288,17 +288,16 @@ make phase8-check
 For a controlled single-recording run:
 
 ```bash
-SPARK_SIGNAL_RECORDING_KEYS=SC4001E make gold-signal-features
+SIGNAL_FEATURE_RECORDING_KEYS=SC4001E make gold-signal-features
 ```
 
-The environment allowlist is an operational testing control. Production logic
+`SIGNAL_FEATURE_RECORDING_KEYS` is the canonical feature-scope selector shared
+by Gold signal features, Gold validation, and integrated Gold. Production logic
 does not contain a hard-coded five-recording allowlist.
 
 ## 11. Phase boundary
 
-Phase 8 produces validated, versioned, reusable signal features.
-
-It does not yet join those rows to sleep-stage labels or relational analytical
-context. That belongs to Phase 9, where the Gold feature identity can be combined
-with Warehouse recording/channel/epoch context without recomputing sample-level
-features.
+Phase 8 produces validated, versioned, reusable signal features and intentionally
+keeps them label-independent. Phase 9 is implemented as a separate integrated
+Gold representation that joins Warehouse recording/channel/epoch context without
+recomputing the sample-level features described here.

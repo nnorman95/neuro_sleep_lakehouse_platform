@@ -20,41 +20,40 @@ The pipeline:
 
 ## 2. Terminal Rule
 
-Run shell commands at the normal shell prompt:
+Run shell commands from the repository shell, for example:
 
 ```text
 (.venv) user@host neuro_sleep_lakehouse_platform %
 ```
 
-Do not paste `make`, `docker compose`, or `PYTHONPATH=...` commands into the
-interactive PostgreSQL prompt:
+The interactive PostgreSQL prompt is a different context:
 
 ```text
 neuro_sleep=#
 ```
 
-Exit `psql` with:
+Exit `psql` with `\q` before running shell commands such as `make`,
+`docker compose`, or `PYTHONPATH=...`.
 
-```text
-\q
-```
 
 ## 3. Prerequisites
 
-```bash
-cd "/path/to/neuro_sleep_lakehouse_platform"
-source .venv/bin/activate
-make up
-make ps
-make migrate
-```
-
-Run platform checks before production-like work:
+From a repository checkout, use the canonical local setup:
 
 ```bash
-make smoke
-make reliability-smoke
+make doctor
+make bootstrap
 ```
+
+For later sessions, start and verify the existing environment with:
+
+```bash
+make platform-up
+make platform-status
+```
+
+Activate `.venv` only when running direct Python commands outside the Make
+entrypoints.
 
 ## 4. Source Configuration
 
@@ -289,18 +288,22 @@ make reliability-smoke
 
 ## 14. Final Validation
 
+For Extract/Silver changes, run the focused regression set:
+
 ```bash
-make test
+make smoke
+make reliability-smoke
+make silver-smoke
 git diff --check
 ```
 
 Current verified result:
 
 ```text
-Core:        12/12
+Core:        15/15
 Reliability: 17/17
-Silver:      24/24
-Total:       53/53
+Silver:      26/26
+Total:       58/58
 ```
 
 Extract changes are not complete until failure handling, interruption cleanup,

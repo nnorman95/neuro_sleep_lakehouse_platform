@@ -2,8 +2,9 @@
 
 ## 1. Scope
 
-The current production baseline includes four Sleep Cassette pairs and one
-Sleep Telemetry pair.
+The full-signal inspection baseline includes four Sleep Cassette pairs and one
+Sleep Telemetry pair. The relational analytical cohort is larger (18 recordings),
+but the additional 13 recordings are metadata-only by design.
 
 Cassette:
 
@@ -195,13 +196,15 @@ Use `subject_key` for logical participants and `recording_key` for logical
 recording/night identity. Keep these separate from concrete Silver
 `recording_id`.
 
-## 9. Production Totals
+## 9. Full-Signal Inspection Totals
 
-Across four Cassette and one Telemetry recording:
+Across the four Cassette and one Telemetry recordings:
 
 ```text
-116,255,936 Silver signal rows
+116,242,840 signal rows
+     13,096 recording/channel/interval/epoch metadata rows
+116,255,936 total rows across the five Silver recording datasets
 ```
 
-The current inspection supports Warehouse modeling but does not imply that the
-entire Sleep-EDF source has been processed.
+This inspection covers the five-recording full-signal subset. It does not imply
+that the entire Sleep-EDF source has been processed.
