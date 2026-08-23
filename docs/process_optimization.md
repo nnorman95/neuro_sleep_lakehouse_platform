@@ -428,9 +428,9 @@ These omissions are part of the optimization strategy: operational simplicity is
 preferred over infrastructure or tuning that does not solve a demonstrated
 problem.
 
-## 15. Evidence to preserve in later phases
+## 15. Evidence to preserve in future changes
 
-Later phases should continue recording evidence such as:
+Any future maintenance or extension should continue recording evidence such as:
 
 ```text
 manual steps removed

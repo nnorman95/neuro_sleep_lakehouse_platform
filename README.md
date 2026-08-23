@@ -5,8 +5,9 @@ sleep-neuroscience data. It ingests source files from PhysioNet, keeps the raw
 objects immutable, creates validated Silver Parquet datasets, loads relational
 metadata into PostgreSQL, and builds analytical models with dbt.
 
-Phase 8 is complete and released as `v0.5.0-features`. Phase 9 adds
-**Feature Integration**: compact Gold signal features are joined to Warehouse
+Phase 8 is released as `v0.5.0-features`. Phase 9 is released as
+`v0.6.0-integration` and adds **Feature Integration**: compact Gold signal
+features are joined to Warehouse
 subject, recording, channel, and optional sleep-stage context without
 recomputing sample-level signals. Phase 10 adds **Airflow orchestration** around
 the existing project entrypoints without moving data-processing logic into DAGs.
@@ -51,10 +52,8 @@ coverage without doing expensive work that the current models do not use.
 
 ```text
 Airflow 3.3.1 / LocalExecutor
-neurosleep_lakehouse_pipeline
-        |
-        | invokes existing project entrypoints
-        v
+controls the batch/lakehouse path by invoking existing project commands
+
 PhysioNet Sleep-EDF
         |
         v
@@ -73,35 +72,47 @@ parsing + normalization + quality gates
 MinIO Silver
 versioned Parquet + _SUCCESS.json
         |
-        +----------------------------+
-        |                            |
-        v                            v
-PostgreSQL staging              Spark 4.2 + S3A
-metadata + epochs              selected signal Parquet
-        |                            |
-        v                            v
-dbt Warehouse Core              MinIO Gold signal_features
-        |                       30-second signal features
-        |                            |
-        +-------------+--------------+
-                      |
-                      v
-              Spark Feature Integration
-                      |
-                      v
-              MinIO Gold integrated_signal_features
-              features + Warehouse context
+        +-------------------------------+
+        |                               |
+        | metadata + epochs             | signal Parquet
+        v                               v
+PostgreSQL staging                 Spark 4.2 + S3A
+        |                               |
+        v                               v
+dbt Warehouse Core                 MinIO Gold signal_features
+        |                               |
+        +--> dbt Analytics Marts        |
+        |                               |
+        +--------- Warehouse context ---+
+                                        |
+                                        v
+                                Spark Feature Integration
+                                        |
+                                        v
+                          MinIO Gold integrated_signal_features
 
-dbt Warehouse Core
+
+Simulated BCI device events
         |
         v
-dbt Analytics Marts
+Kafka 4.3.1 / KRaft
+        |
+        v
+validated consumer
+   | invalid                         | valid
+   v                                 v
+quality.quarantine_records     ops.kafka_device_event_inbox
+                                        |
+                                        v
+                               dbt warehouse.fact_device_event
 ```
 
-High-volume signal samples stay in MinIO/Parquet. PostgreSQL remains the
-relational path for operational metadata, lineage, quality, dimensional models,
-and marts. Spark handles the high-volume signal path and the compact
-Gold-to-Warehouse feature integration.
+The Airflow DAG orchestrates the batch/lakehouse path only; Kafka ingestion is a
+separate runtime path. High-volume signal samples stay in MinIO/Parquet.
+PostgreSQL remains the relational path for operational metadata, lineage,
+quality, dimensional models, device-event facts, and marts. Spark handles the
+high-volume signal path and Gold feature integration.
+
 ## Engineering decisions
 
 A few design choices are deliberate:
@@ -356,17 +367,19 @@ More detail is in
 
 ## Validation
 
-GitHub Actions runs a lightweight repository-contract workflow on pushes and
-pull requests. The same checks can be reproduced locally without Docker,
+GitHub Actions runs the lightweight repository-contract workflow for pull
+requests and for pushes to `main`. The same checks can be reproduced locally
+without Docker,
 PostgreSQL, MinIO, Kafka, Airflow, Spark execution, or the full signal dataset:
 
 ```bash
 make ci-check
 ```
 
-This fast CI validates the Python/dependency contract, SQL migration manifest,
-Python syntax, shell syntax, the pure recording-scope regression, and repository
-hygiene. Runtime and high-volume integration suites remain explicit local
+This fast CI validates the Python/dependency contract, command/config contract,
+SQL migration manifest, Python syntax, shell syntax, the pure recording-scope
+regression, and repository hygiene. Runtime and high-volume integration suites
+remain explicit local
 checks; CI does not duplicate the existing Docker/Spark/Airflow regressions.
 `make batch-check` is the named aggregate for the core batch smoke bundle;
 `make test` remains a compatibility alias rather than implying every project
@@ -524,38 +537,49 @@ v0.2.0-silver
 v0.3.0-warehouse
 v0.4.0-analytics
 v0.5.0-features
+v0.6.0-integration
+v1.0.0
 ```
 
-Phase 9 extends the released feature layer with Warehouse-aware integrated Gold
-data while preserving the reusable Phase 8 signal-feature dataset. Phase 10 adds
-a reproducible Airflow runtime and a thin end-to-end DAG. Phase 11 adds the local
-Kafka/KRaft device-event path, durable restart-safe consumption, quarantine
-handling, arrival classification, and `warehouse.fact_device_event`. Phase 12
-hardens existing trusted boundaries with controlled broken-data fixtures and one
-canonical data-quality audit. Phase 13 hardens clean-machine reproducibility,
+Phase 9 is released as `v0.6.0-integration`. The `v1.0.0` release consolidates
+the later operational milestones instead of creating one tag per phase: Phase 10
+adds Airflow orchestration, Phase 11 adds the Kafka/KRaft device-event path,
+Phase 12 hardens data-quality boundaries, and Phase 13 hardens reproducibility,
 daily operations, targeted recovery, migration execution, and repository CI.
-No Phase 10, Phase 11, Phase 12, or Phase 13 release tag has been created yet.
-## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md)
-- [`docs/data_flow.md`](docs/data_flow.md)
+## Documentation map
+
+If you are new to the repository, start with these four documents:
+
+- [`docs/architecture.md`](docs/architecture.md) — system components and boundaries;
+- [`docs/data_flow.md`](docs/data_flow.md) — end-to-end batch, Gold, Kafka, and recovery flows;
+- [`docs/local_setup.md`](docs/local_setup.md) — reproducible local setup and operation;
+- [`docs/process_optimization.md`](docs/process_optimization.md) — how repeated work, recovery paths, and operational complexity are reduced.
+
+Data model and governance:
+
+- [`docs/data_model.md`](docs/data_model.md)
+- [`docs/database_schemas.md`](docs/database_schemas.md)
+- [`docs/data_contracts.md`](docs/data_contracts.md)
+- [`docs/quality_rules.md`](docs/quality_rules.md)
+- [`docs/access_model.md`](docs/access_model.md)
+
+Pipeline and analytical layers:
+
+- [`docs/data_sources.md`](docs/data_sources.md)
+- [`docs/extract_runbook.md`](docs/extract_runbook.md)
+- [`docs/edf_inspection.md`](docs/edf_inspection.md)
+- [`docs/storage_layout.md`](docs/storage_layout.md)
 - [`docs/analytics_marts.md`](docs/analytics_marts.md)
 - [`docs/spark_signal_features.md`](docs/spark_signal_features.md)
 - [`docs/feature_integration.md`](docs/feature_integration.md)
 - [`docs/airflow_orchestration.md`](docs/airflow_orchestration.md)
 - [`docs/kafka_device_events.md`](docs/kafka_device_events.md)
 - [`docs/data_quality_hardening.md`](docs/data_quality_hardening.md)
-- [`docs/process_optimization.md`](docs/process_optimization.md)
-- [`docs/data_model.md`](docs/data_model.md)
-- [`docs/database_schemas.md`](docs/database_schemas.md)
-- [`docs/data_contracts.md`](docs/data_contracts.md)
-- [`docs/quality_rules.md`](docs/quality_rules.md)
-- [`docs/access_model.md`](docs/access_model.md)
-- [`docs/data_sources.md`](docs/data_sources.md)
-- [`docs/storage_layout.md`](docs/storage_layout.md)
-- [`docs/local_setup.md`](docs/local_setup.md)
-- [`docs/extract_runbook.md`](docs/extract_runbook.md)
-- [`docs/edf_inspection.md`](docs/edf_inspection.md)
+
+Historical architecture decisions are preserved as ADRs. Their phase-specific
+wording is intentionally historical even when later phases added new capabilities:
+
 - [`docs/decisions/001_silver_identity_and_lineage.md`](docs/decisions/001_silver_identity_and_lineage.md)
 - [`docs/decisions/002_warehouse_grain_and_version_selection.md`](docs/decisions/002_warehouse_grain_and_version_selection.md)
 - [`docs/decisions/003_warehouse_physical_model_and_build_semantics.md`](docs/decisions/003_warehouse_physical_model_and_build_semantics.md)

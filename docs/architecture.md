@@ -1,10 +1,10 @@
 # Architecture
 
-This document describes the platform as implemented through **Phase 11: Kafka
-Device Events**. The existing Bronze, Silver, PostgreSQL staging, Warehouse,
-relational marts, Spark/Gold, integrated Gold, and Phase 10 Airflow paths remain
-in place. Phase 11 adds a local Kafka/KRaft streaming path for simulated BCI
-device events with durable PostgreSQL ingestion and a dbt Warehouse fact.
+This document describes the platform as implemented through **Phase 13:
+Operational Hardening and Process Optimization**. Bronze, Silver, PostgreSQL
+staging, Warehouse/marts, Spark/Gold, integrated Gold, Airflow orchestration,
+Kafka device events, data-quality hardening, and the operational/recovery layer
+are all part of the current v1.0.0 architecture.
 
 ## 1. Source
 
@@ -43,7 +43,7 @@ raw         source-object registry and ingestion metadata
 staging     verified relational landing for selected Silver publications
 warehouse   dimensional analytical core
 mart        consumption-ready relational analytics
-ops         pipeline runs, file-attempt history, and durable Kafka event inbox
+ops         pipeline runs, file-attempt history, Kafka inbox, and SQL migration history
 quality     quarantine metadata and durable quality results
 governance  source registry, contracts, and column classifications
 ```
@@ -89,6 +89,8 @@ Operational execution is tracked in:
 ```text
 ops.pipeline_run
 ops.file_attempt
+ops.kafka_device_event_inbox
+ops.sql_migration_history
 quality.quality_check_results
 quality.quarantine_records
 ```
@@ -381,8 +383,10 @@ Silver smoke tests:       26/26
 dbt models:               15
 dbt data tests:           292
 Full dbt build:           301/301 PASS
-Phase 10 regression:       PASS
-Phase 11 Kafka audit:      PASS
+Phase 10 regression:         PASS
+Phase 11 Kafka audit:        PASS
+Phase 12 data-quality audit: PASS
+Phase 13 operational audit:  PASS
 ```
 
 Phase 8 has additionally verified:
@@ -492,16 +496,35 @@ inbox and retains Kafka lineage, arrival classification, and source payload.
 
 See [`kafka_device_events.md`](kafka_device_events.md).
 
-## 18. Next architectural scope
+## 18. Phase 12 data-quality hardening
 
-Still outside Phase 11:
+Phase 12 does not add another data-processing layer. Controlled broken-data
+fixtures exercise the production Silver and staging validators for schema drift,
+manifest integrity, publication consistency, and subject-metadata identity.
+Failures reuse the existing quality/quarantine boundaries and fail closed.
 
-- broader streaming observability and metrics only when a concrete operational
-  requirement exists;
-- dashboards and broader BI access;
-- full-source processing;
-- analytical signal-quality facts once a trusted signal-quality dataset and
-  grain are defined.
+## 19. Phase 13 operational hardening
 
-Those layers should be added only when their upstream datasets, grain, and use
-are explicit.
+Phase 13 adds an operational control layer around the existing architecture:
+
+```text
+make doctor -> make bootstrap -> make platform-status
+make ops-status
+make backfill RECORDING_KEY=SC4001E
+make migrate -> ops.sql_migration_history
+make ci-check
+```
+
+`ops.pipeline_run` terminal outcomes cannot be overwritten through the project
+helper. `make ops-status` separates current incidents from historical failures.
+Targeted backfill starts from an existing Silver publication and reuses the
+normal staging/dbt/Gold paths. SQL migrations are tracked by repository path and
+SHA-256 checksum, and lightweight CI checks repository contracts without
+starting the high-volume runtime.
+
+## 20. Deliberate v1.0.0 scope boundary
+
+The v1.0.0 release deliberately does not add a Spark cluster, dashboards,
+full-source signal processing, or analytical signal-quality facts without a
+defined trusted dataset and grain. These remain optional future extensions only
+when a concrete requirement justifies the added operational complexity.

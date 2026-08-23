@@ -157,10 +157,10 @@ masking_policy
 
 Warehouse tables have registry-backed column classification for all 108
 physical columns: 81 original Warehouse Core columns plus 27 columns in
-`warehouse.fact_device_event`. Phase 7 marts currently use enforced dbt contracts and inherit
+`warehouse.fact_device_event`. Phase 7 marts use enforced dbt contracts and inherit
 the restricted analytical policy from their Warehouse inputs. Dedicated mart
-registry classifications are intentionally deferred until the access/BI phase,
-before any broader publication is enabled.
+registry classifications are outside the v1.0.0 scope; they are required before
+any broader BI or external publication is enabled.
 
 ## 8. Current Status
 
@@ -174,8 +174,8 @@ Implemented:
 - Warehouse classification for all 108 physical columns, including the Phase 11 device-event fact;
 - restricted/redacted handling for source subject identifiers;
 - aggregate-only policy for exact demographic/treatment fields where configured;
-- Phase 7 marts that omit direct subject IDs and source-object lineage and remain restricted pending broader-access review.
+- Phase 7 marts that omit direct subject IDs and source-object lineage and remain restricted.
 
-Phase 7 marts are implemented and keep direct subject IDs and source-object lineage out. Their
-remaining access-governance work is explicit mart-level registry classification
-before BI or broader publication is enabled.
+For v1.0.0, the marts remain controlled analytical models. Broader BI or external
+publication would require explicit mart-level registry classification and a
+separate access review first.

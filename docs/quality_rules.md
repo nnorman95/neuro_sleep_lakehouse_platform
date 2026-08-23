@@ -1,7 +1,7 @@
 # Quality Rules
 
-This document separates implemented quality behavior from future analytical
-quality work.
+This document separates implemented quality behavior from analytical quality
+work that is deliberately outside the v1.0.0 scope.
 
 ## 1. Principles
 
@@ -379,16 +379,18 @@ Implemented Phase 7 mart checks:
 
 The current full dbt build passes 301/301 executed model/test nodes: 15 models are defined in the project and 292 data tests are registered.
 
-## 14. Future Quality Scope
+## 14. Deliberate v1.0.0 Quality Boundary
 
-Not implemented yet:
+Not included in v1.0.0:
 
-- window-level signal-quality metrics such as missing ratio, noise score, or
-  artifact score;
-- Great Expectations integration;
-- Gold feature-quality rules;
+- an analytical signal-quality fact with metrics such as missing ratio, noise score,
+  or artifact score, because no trusted upstream quality dataset/grain has been defined;
+- Great Expectations, because the existing validation stack already covers the
+  current contracts without requiring a second framework;
+- scientific Gold feature-quality thresholds beyond the implemented structural,
+  finite-value, timing, coverage, manifest, and reconciliation checks.
 
-These remain future scope and must not be represented as current datasets.
+These are scope boundaries, not implied unfinished datasets.
 
 ## 15. Validation Commands
 
@@ -422,7 +424,7 @@ Phase 12 audit:                 PASS
 - publishing `_SUCCESS.json` after a quality error;
 - overwriting a valid versioned Silver prefix;
 - loading every signal sample into PostgreSQL;
-- claiming future signal-quality or device-event datasets are implemented;
+- claiming an analytical signal-quality dataset is implemented before its trusted upstream data and grain exist;
 - exposing restricted subject identifiers in broad marts by default;
 - documenting a constraint that the physical database does not enforce.
 
@@ -534,10 +536,10 @@ Phase 12 controlled broken-data fixture suite
 Phase 12 canonical data-quality validation audit
 ```
 
-Next:
+Outside the current scope unless a concrete requirement appears:
 
 ```text
-additional Gold feature-quality rules only when a concrete downstream requirement exists
-signal-quality rules only after a trusted analytical signal-quality dataset exists
-broader streaming observability only when a concrete operational requirement exists
+additional scientific Gold feature-quality thresholds
+analytical signal-quality rules backed by a trusted signal-quality dataset
+broader streaming observability beyond the current operational-health controls
 ```

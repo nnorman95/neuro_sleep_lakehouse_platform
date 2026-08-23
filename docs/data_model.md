@@ -1,12 +1,15 @@
 # Data Model
 
-This document defines the current and planned data model for the NeuroSleep Lakehouse Platform through **Phase 7: Analytics Marts**.
+This document defines the v1.0.0 data model for the NeuroSleep Lakehouse
+Platform. Historical phase labels are retained where they explain when a design
+was introduced, but current-state sections include the later Gold and Kafka
+models implemented through Phase 13.
 
 It separates three states clearly:
 
-- **implemented** structures in Bronze, Silver, PostgreSQL staging, the Warehouse Core, and Phase 7 marts;
-- **implemented governance and dbt validation** around the current relational analytical path;
-- **future scope** that must not be implemented before a trusted upstream dataset and grain exist.
+- **implemented** structures in Bronze, Silver, PostgreSQL, Warehouse/marts, Gold, and the Kafka path;
+- **implemented governance and validation** around those trusted boundaries;
+- **deliberate v1.0.0 exclusions** that require a trusted upstream dataset and explicit grain before they are added.
 
 The platform uses normalized relational modeling for operational, quality, governance, and staging data, and dimensional modeling for analytical warehouse and mart data.
 
@@ -33,6 +36,8 @@ Implemented PostgreSQL structures include:
 raw.file_registry
 ops.pipeline_run
 ops.file_attempt
+ops.kafka_device_event_inbox
+ops.sql_migration_history
 quality.quarantine_records
 quality.quality_check_results
 governance.source_system_registry
@@ -43,6 +48,9 @@ governance.column_classification
 `raw.file_registry` is the authoritative registry for Bronze source objects. It stores object location, source URL, size, SHA-256 checksum, ingestion run, and status.
 
 `ops.pipeline_run` and `ops.file_attempt` provide run-level and file-level execution history.
+`ops.kafka_device_event_inbox` is the durable validated Kafka sink used by
+`warehouse.fact_device_event`. `ops.sql_migration_history` records applied SQL
+manifest paths and SHA-256 checksums.
 
 `quality.quarantine_records` stores rejected-record metadata and optional pointers to large payloads in MinIO. Silver quality-gate failures use the concrete Silver output location as their stable trace identity, refresh one active incident across repeated failures, and resolve that incident after a successful written or skipped rerun.
 
@@ -917,9 +925,10 @@ The relational modeling sequence is now complete through Phase 7:
 8. three Phase 7 marts implemented and reconciled back to Warehouse
 ```
 
-## 13. Deferred Models
+## 13. Analytical Model Boundaries
 
-These models are not part of Warehouse Core.
+The models below clarify what is implemented outside the original Warehouse Core
+and what remains intentionally excluded from v1.0.0.
 
 ### `warehouse.fact_signal_quality`
 
@@ -957,9 +966,13 @@ out-of-order messages remain eligible and carry explicit flags.
 
 Not added as a separate Warehouse fact. The current recording-level summary is derived from the trusted Warehouse Core in `mart.mart_recording_sleep_summary`. A second recording-summary fact would duplicate the same grain without a current requirement.
 
-### Signal-feature facts
+### Gold signal-feature datasets
 
-Deferred to Gold or a later feature-processing phase. Future features require their own grain, version, and lineage.
+Implemented in Phase 8 and Phase 9 as versioned MinIO Gold datasets rather than
+PostgreSQL facts. `signal_features` stores one recording/channel/30-second window
+row; `integrated_signal_features` enriches the same grain with Warehouse context.
+Keeping them in object storage avoids loading the high-volume signal path into the
+relational Warehouse.
 
 ### Warehouse recording-version history
 
@@ -1041,23 +1054,28 @@ Analytical cohort: 18 recordings / 9 represented subjects
 Silver subjects: 100 / recording contexts: 197
 PostgreSQL staging: 18 recordings / 110 channels / 3,263 intervals / 35,710 epochs
 Warehouse Core: 100 subjects / 18 recordings / 110 channels / 8 source stages / 35,710 epochs
-Phase 11 Warehouse device-event fact implemented at one row per event_id
-Fail-closed dbt version selection and deterministic Warehouse keys
-Warehouse governance contracts: 6 active v1 contracts / 108 of 108 columns classified
 Phase 7 analytical intermediates and three marts
 Mart rows: 18 recording summaries / 126 stage rows / 6 coverage rows
-Core + reliability + Silver smoke suites: 58/58
+Gold signal features: 5 recordings / 83,909 rows
+Integrated Gold: 5 recordings / 83,909 rows / 83,384 labeled / 525 unlabeled
+Phase 11 device-event fact: one row per validated event_id
+Warehouse governance contracts: 6 active v1 contracts / 108 of 108 columns classified
+Tracked SQL migration history in ops.sql_migration_history
 Full dbt build: 301/301 PASS
 Phase 11 Kafka validation audit: PASS
+Phase 12 data-quality audit: PASS
+Phase 13 operational hardening audit: PASS
 ```
 
-Not implemented yet:
+Deliberately outside v1.0.0:
 
 ```text
-high-volume signal feature engineering and Gold feature models
-deferred signal-quality and device-event analytical facts
-broad BI/dashboard access
-full-source processing
+warehouse.fact_signal_quality without a trusted analytical signal-quality dataset
+broad BI/dashboard publication without a separate access review
+full-source signal processing
+a separate Warehouse history model without an analytical requirement
 ```
 
-The relational path from verified Silver publications through staging, Warehouse, and descriptive marts is complete for the current analytical cohort. The next major scope is high-volume signal feature processing, not another relational redesign.
+The v1.0.0 model is complete for the scoped local platform. Later extensions
+should add new datasets or facts only when the upstream data, grain, access
+boundary, and operational requirement are explicit.

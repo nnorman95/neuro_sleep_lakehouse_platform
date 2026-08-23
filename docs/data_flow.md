@@ -1,10 +1,9 @@
 # Data Flow
 
-This document follows data from PhysioNet through the relational analytics
-path, the Phase 8 Spark/Gold signal-feature path, the Phase 9 feature integration
-path, the Phase 10 Airflow control flow, and the Phase 11 Kafka device-event
-stream. It focuses on what is implemented today and where the project
-deliberately stops.
+This document follows data from PhysioNet through relational analytics,
+Spark/Gold signal features, integrated Gold, Airflow orchestration, Kafka device
+events, Phase 12 data-quality hardening, and Phase 13 operational/recovery flows.
+It focuses on the v1.0.0 implementation and its deliberate boundaries.
 
 ## 1. Extract and Bronze
 
@@ -301,8 +300,8 @@ A completed but invalid prefix fails closed.
 
 ## 11. Validation flow
 
-The relational dbt project contains 14 models and 249 data tests. The Phase 7
-full build baseline passes all 257 executed model/test nodes.
+The relational dbt project contains 15 models and 292 data tests. The current
+full build passes all 301 executed model/test nodes.
 
 Phase 8 adds separate high-volume checks:
 
@@ -322,6 +321,9 @@ Canonical milestone regressions are:
 make phase8-check
 make phase9-check
 make phase10-check
+make phase11-check
+make phase12-check
+make phase13-check
 ```
 
 `phase10-check` runs the Phase 9 regression first, then validates the dependency
@@ -494,3 +496,26 @@ time is classified explicitly.
 See [`kafka_device_events.md`](kafka_device_events.md).
 
 See [`airflow_orchestration.md`](airflow_orchestration.md).
+
+## 17. Phase 12 data-quality validation flow
+
+Phase 12 injects controlled invalid fixtures at existing trust boundaries rather
+than creating another data path. The fixtures call production validators and
+confirm fail-closed behavior for schema drift, manifest integrity, publication
+consistency, and subject-metadata identity.
+
+## 18. Phase 13 operational and recovery flow
+
+Phase 13 reduces repeated manual operation while preserving the same processing
+boundaries:
+
+```text
+clean checkout -> doctor -> bootstrap -> platform readiness
+existing Silver recording -> targeted backfill -> staging -> dbt -> Gold -> integrated Gold
+SQL manifest -> checksum verification -> apply pending entries -> ops.sql_migration_history
+repository change -> lightweight CI contracts
+```
+
+Operational health reads pipeline/file-attempt/quarantine state without changing
+it. Completed immutable outputs are skipped, and recovery does not bypass normal
+validation or publication rules.

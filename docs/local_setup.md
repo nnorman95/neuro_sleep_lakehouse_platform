@@ -308,11 +308,11 @@ The fast repository-contract suite is:
 make ci-check
 ```
 
-The same command runs in `.github/workflows/ci.yml` on GitHub pushes and pull
-requests. It intentionally requires no project services and does not download or
-process Sleep-EDF signal data. It checks dependency alignment, SQL manifest
-integrity, Python compilation, shell syntax, the pure recording-scope regression,
-and repository hygiene.
+The same command runs in `.github/workflows/ci.yml` for pull requests and pushes
+to `main`. It intentionally requires no project services and does not download or
+process Sleep-EDF signal data. It checks dependency alignment, command/config
+consistency, SQL manifest integrity, Python compilation, shell syntax, the pure
+recording-scope regression, and repository hygiene.
 
 Docker-backed, database-backed, Kafka, Airflow, and high-volume Spark checks stay
 in the explicit local suites below.
@@ -544,15 +544,15 @@ feature path and [`feature_integration.md`](feature_integration.md) for Phase 9
 join semantics, lineage, and publication behavior.
 ## 13. Stop Services
 
+For the normal full-platform lifecycle, use:
 
 ```bash
-make airflow-down
-make kafka-down
-make down
+make platform-down
 ```
 
-Stop Airflow first when Airflow is running, then stop Kafka if it was started,
-then stop the base PostgreSQL/MinIO stack.
+This stops Airflow, Kafka, PostgreSQL, and MinIO without removing persistent
+Docker volumes. The lower-level `make airflow-down`, `make kafka-down`, and
+`make down` commands remain available for focused component work.
 
 ## 14. Git Safety
 

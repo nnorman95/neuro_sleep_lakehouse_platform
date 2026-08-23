@@ -130,9 +130,13 @@ subjects: 100
 recording contexts: 197
 ```
 
-## 7. Current Production Sample
+## 7. Current Production Scope
 
-The current Bronze/Silver production sample contains:
+The current relational analytical cohort contains 18 Silver recording
+publications representing 9 subjects. Across that cohort, staging contains 110
+channels, 3,263 annotation intervals, and 35,710 emitted sleep-stage epochs.
+
+The high-volume full-signal subset is intentionally smaller:
 
 ```text
 SC4001E
@@ -142,14 +146,12 @@ SC4012E
 ST7011J
 ```
 
-The four Cassette recordings and one Telemetry recording produce
-116,242,840 Silver signal rows in total. Together with 13,096 recording-metadata
-rows (5 recordings, 33 channels, 834 intervals, and 12,224 epochs), the current
-Silver recording outputs contain 116,255,936 rows across those datasets.
+Those five recordings produce 116,242,840 Silver signal rows. The other 13
+analytical recordings are metadata-only by design, so the relational cohort can
+expand without generating signal Parquet that current models do not use.
 
-The subject workbooks are processed as complete metadata sources, so the
-subject publication covers all 100 source subjects and all 197 contexts rather
-than only the five signal recordings currently materialized in Silver.
+The subject workbooks are processed as complete metadata sources, so the subject
+publication covers all 100 source subjects and all 197 recording contexts.
 
 ## 8. User-Controlled Source Selection
 
