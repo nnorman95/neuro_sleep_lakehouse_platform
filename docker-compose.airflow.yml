@@ -33,6 +33,7 @@ x-airflow-common: &airflow-common
     SLEEP_EDF_INCLUDE_METADATA: "${SLEEP_EDF_INCLUDE_METADATA:-true}"
     SLEEP_EDF_RECORDING_KEYS: "${SLEEP_EDF_RECORDING_KEYS:-}"
     SILVER_INCLUDE_SIGNALS: "${SILVER_INCLUDE_SIGNALS:-true}"
+    SIGNAL_FEATURE_RECORDING_KEYS: "${SIGNAL_FEATURE_RECORDING_KEYS:-}"
   volumes:
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./logs/airflow:/opt/airflow/logs

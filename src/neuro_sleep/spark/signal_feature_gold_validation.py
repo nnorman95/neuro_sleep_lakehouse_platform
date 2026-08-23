@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import os
 
 from pyspark.sql import functions as F
 
@@ -33,70 +32,6 @@ from neuro_sleep.spark.signal_input import (
 from neuro_sleep.storage.object_storage import (
     get_object_storage_client,
 )
-
-
-_ALLOWLIST_ENV = (
-    "SPARK_SIGNAL_RECORDING_KEYS"
-)
-
-
-def _filter_inputs(
-    inputs: tuple[
-        SelectedSignalInput,
-        ...,
-    ],
-) -> tuple[
-    SelectedSignalInput,
-    ...,
-]:
-    raw = os.environ.get(
-        _ALLOWLIST_ENV,
-        "",
-    ).strip()
-
-    if not raw:
-        return inputs
-
-    requested = tuple(
-        part.strip()
-        for part in raw.split(",")
-        if part.strip()
-    )
-
-    if not requested:
-        raise RuntimeError(
-            f"{_ALLOWLIST_ENV} is set but "
-            "contains no recording keys"
-        )
-
-    if len(requested) != len(
-        set(requested)
-    ):
-        raise RuntimeError(
-            f"{_ALLOWLIST_ENV} contains "
-            "duplicate recording keys"
-        )
-
-    by_key = {
-        item.recording_key: item
-        for item in inputs
-    }
-
-    missing = [
-        key
-        for key in requested
-        if key not in by_key
-    ]
-    if missing:
-        raise RuntimeError(
-            "Unavailable recording keys: "
-            + ", ".join(missing)
-        )
-
-    return tuple(
-        by_key[key]
-        for key in requested
-    )
 
 
 def _counts(
@@ -151,11 +86,9 @@ def _counts(
 
 def run_validation() -> None:
     settings = get_settings()
-    inputs = _filter_inputs(
-        discover_selected_signal_inputs(
-            settings=settings,
-            verify_live_objects=True,
-        )
+    inputs = discover_selected_signal_inputs(
+        settings=settings,
+        verify_live_objects=True,
     )
     contexts = (
         fetch_signal_channel_contexts(

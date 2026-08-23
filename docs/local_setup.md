@@ -241,7 +241,20 @@ SLEEP_EDF_MAX_RECORDINGS=4
 SLEEP_EDF_INCLUDE_CASSETTE=true
 SLEEP_EDF_INCLUDE_TELEMETRY=true
 SLEEP_EDF_INCLUDE_METADATA=true
+SLEEP_EDF_RECORDING_KEYS=
+SIGNAL_FEATURE_RECORDING_KEYS=
 ```
+
+`SLEEP_EDF_RECORDING_KEYS` is the optional source/Silver run selector.
+`SIGNAL_FEATURE_RECORDING_KEYS` is the canonical optional selector shared by
+Gold signal features and integrated Gold. When the signal selector is empty,
+both jobs use every Warehouse-selected Silver representation that actually
+contains signals.
+
+The two settings are intentionally separate: the relational analytical cohort
+may contain metadata-only recordings, while the high-volume signal subset can
+remain smaller. Gold and integrated Gold must not maintain independent signal
+allowlists.
 
 Full profile:
 
