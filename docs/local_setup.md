@@ -176,6 +176,29 @@ make ops-status
 The unified lifecycle is the normal path. Lower-level commands remain available
 for focused development and recovery.
 
+### Targeted recording recovery / backfill
+
+For an existing signal-bearing Silver recording, reconcile only that recording
+through the downstream batch path:
+
+```bash
+make backfill RECORDING_KEY=SC4001E
+```
+
+The command starts from the current Silver publication. It does not download
+PhysioNet source data, delete immutable objects, or expand the signal cohort.
+`SLEEP_EDF_RECORDING_KEYS` limits Silver-to-staging publication discovery, and
+`SIGNAL_FEATURE_RECORDING_KEYS` applies the same key to Gold and integrated
+Gold. Existing complete publications are skipped; existing Gold publication
+logic retains its normal recovery behavior for incomplete published objects.
+
+The dbt step intentionally remains the normal set-based relational build. The
+Warehouse and marts are small compared with the signal path, so a special
+recording-specific dbt model path is not introduced only for backfill.
+
+This command is for recordings already present in the full-signal Silver
+subset. Metadata-only cohort expansion remains a separate operation.
+
 ### PostgreSQL and MinIO
 
 ```bash
@@ -245,7 +268,7 @@ SLEEP_EDF_RECORDING_KEYS=
 SIGNAL_FEATURE_RECORDING_KEYS=
 ```
 
-`SLEEP_EDF_RECORDING_KEYS` is the optional source/Silver run selector.
+`SLEEP_EDF_RECORDING_KEYS` is the optional source/Silver/staging run selector.
 `SIGNAL_FEATURE_RECORDING_KEYS` is the canonical optional selector shared by
 Gold signal features and integrated Gold. When the signal selector is empty,
 both jobs use every Warehouse-selected Silver representation that actually

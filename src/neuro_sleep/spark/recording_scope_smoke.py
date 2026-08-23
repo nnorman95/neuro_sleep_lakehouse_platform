@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from neuro_sleep.spark.recording_scope import select_recording_scope
+from neuro_sleep.recording_scope import select_recording_scope
 
 
 @dataclass(frozen=True)
