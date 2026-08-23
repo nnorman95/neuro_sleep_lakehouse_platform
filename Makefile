@@ -1,13 +1,24 @@
-.PHONY: help up down ps bootstrap buckets migrate smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check
+.PHONY: help up down ps bootstrap demo backfill buckets migrate migration-history-check ci-check smoke reliability-smoke silver-smoke spark-smoke spark-feature-check gold-signal-features gold-signal-features-check gold-reliability-smoke feature-integration-check integrated-signal-features integrated-signal-features-check integrated-gold-reliability-smoke phase8-check phase9-check phase10-check batch-check test source-check psql clean-pycache kafka-up kafka-down kafka-ps kafka-init kafka-topic-check kafka-produce kafka-producer-check kafka-consume kafka-consumer-check kafka-smoke airflow-bootstrap airflow-up airflow-down airflow-ps airflow-smoke airflow-password kafka-inbox-check kafka-ingest kafka-ingestion-check kafka-invalid-check kafka-arrival-check kafka-warehouse-check phase11-check phase12-quality-smoke phase12-check phase13-check ops-status ops-status-smoke doctor env-init python-env platform-up platform-status platform-down
 help:
 	@echo "NeuroSleep local commands"
 	@echo
 	@echo "make up                 Start PostgreSQL and MinIO"
 	@echo "make down               Stop local Docker services"
 	@echo "make ps                 Show Docker services"
-	@echo "make bootstrap          Bootstrap the local platform"
+	@echo "make doctor             Check host prerequisites without changing state"
+	@echo "make env-init           Create or validate the local .env safely"
+	@echo "make python-env         Create or validate the local Python environment"
+	@echo "make platform-up        Start the initialized full local platform"
+	@echo "make platform-status    Check full local platform readiness"
+	@echo "make platform-down      Stop the full local platform safely"
+	@echo "make bootstrap          Bootstrap the complete platform from a fresh checkout"
+	@echo "make demo               Run a compact one-recording batch + Gold demo"
+	@echo "make backfill RECORDING_KEY=SC4001E  Reconcile one existing signal recording"
 	@echo "make buckets            Initialize MinIO buckets"
-	@echo "make migrate            Run SQL migrations and seeds"
+	@echo "make migrate            Run tracked SQL migrations and seeds"
+	@echo "make migration-history-check Validate migration history and checksum drift"
+	@echo "make ci-check           Run lightweight repository CI contracts"
+	@echo "make batch-check        Run core batch smoke bundle"
 	@echo "make smoke              Run core platform smoke tests"
 	@echo "make reliability-smoke  Run reliability and failure tests"
 	@echo "make silver-smoke       Run Silver-layer smoke tests"
@@ -41,6 +52,9 @@ help:
 	@echo "make phase11-check        Run complete Phase 11 Kafka audit"
 	@echo "make phase12-quality-smoke Run Phase 12 broken-data quality fixtures"
 	@echo "make phase12-check        Run complete Phase 12 data-quality audit"
+	@echo "make phase13-check        Run complete Phase 13 operational audit"
+	@echo "make ops-status           Show read-only operational health summary"
+	@echo "make ops-status-smoke     Validate operational health classification"
 	@echo "make kafka-smoke          Validate Kafka runtime"
 	@echo "make airflow-bootstrap    Initialize and start local Airflow"
 	@echo "make airflow-up           Start initialized Airflow services"
@@ -48,7 +62,7 @@ help:
 	@echo "make airflow-ps           Show Airflow service status"
 	@echo "make airflow-smoke        Run Airflow foundation smoke checks"
 	@echo "make airflow-password     Show local Airflow admin password"
-	@echo "make test               Run all test suites"
+	@echo "make test               Alias for make batch-check"
 	@echo "make source-check       Check Sleep-EDF source configuration"
 	@echo "make psql               Open PostgreSQL psql shell"
 	@echo "make clean-pycache      Remove Python cache folders"
@@ -61,14 +75,44 @@ down:
 ps:
 	docker compose ps
 
+doctor:
+	./scripts/check_local_prerequisites.sh
+
+env-init:
+	./scripts/initialize_local_env.sh
+
+python-env:
+	./scripts/ensure_python_environment.sh
+
+platform-up:
+	./scripts/start_local_platform.sh
+
+platform-status:
+	./scripts/check_local_platform_status.sh
+
+platform-down:
+	./scripts/stop_local_platform.sh
+
 bootstrap:
 	./scripts/bootstrap_local.sh
+
+demo:
+	./scripts/run_local_demo.sh
+
+backfill:
+	RECORDING_KEY="$(RECORDING_KEY)" ./scripts/run_recording_backfill.sh
 
 buckets:
 	./scripts/init_minio_buckets.sh
 
 migrate:
 	./scripts/run_sql_migrations.sh
+
+migration-history-check:
+	./scripts/validate_sql_migration_history.sh
+
+ci-check:
+	./scripts/run_ci_checks.sh
 
 smoke:
 	./scripts/run_smoke_tests.sh
@@ -113,7 +157,9 @@ phase9-check:
 phase10-check:
 	./scripts/validate_phase10.sh
 
-test: smoke reliability-smoke silver-smoke spark-smoke gold-reliability-smoke integrated-gold-reliability-smoke
+batch-check: smoke reliability-smoke silver-smoke spark-smoke gold-reliability-smoke integrated-gold-reliability-smoke
+
+test: batch-check
 
 source-check:
 	PYTHONPATH=src python -m neuro_sleep.sources.sleep_edf
@@ -176,6 +222,15 @@ phase12-quality-smoke:
 
 phase12-check:
 	./scripts/validate_phase12_data_quality_hardening.sh
+
+phase13-check:
+	./scripts/validate_phase13_operational_hardening.sh
+
+ops-status:
+	PYTHONPATH=src python -m neuro_sleep.ops.operational_health
+
+ops-status-smoke:
+	PYTHONPATH=src python -m neuro_sleep.ops.operational_health_smoke
 
 kafka-smoke:
 	./scripts/validate_kafka_runtime.sh

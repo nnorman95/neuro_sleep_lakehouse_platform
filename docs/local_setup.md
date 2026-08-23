@@ -28,48 +28,201 @@ Kafka host port 9092
 confluent-kafka 2.15.0
 ```
 
-## 2. Project Location
+All host-published development endpoints bind to `127.0.0.1` by default through
+`LOCAL_BIND_ADDRESS`. This keeps PostgreSQL, MinIO, Kafka, and Airflow reachable
+from the local machine without exposing them to the surrounding LAN. Change the
+bind address only when remote access is intentional and separately secured.
 
-Current local path:
+## 2. Fresh Checkout
+
+Clone the repository and enter it:
+
+```bash
+git clone https://github.com/nnorman95/neuro_sleep_lakehouse_platform.git
+cd neuro_sleep_lakehouse_platform
+```
+
+Do not copy `.env.example` manually and do not create `.venv` manually for the
+normal setup path. The project bootstrap owns those steps so that the same setup
+logic is used on every machine.
+
+## 3. Check Host Prerequisites
+
+Run the read-only doctor before bootstrap:
+
+```bash
+make doctor
+```
+
+It checks Git, Make, curl, Docker, Docker Compose v2, Python 3.11+, Java 21,
+required repository files, Compose resolution, and the Python dependency
+contract.
+
+The command does not create containers, files, databases, or buckets.
+
+## 4. Complete First-Time Bootstrap
+
+Run:
+
+```bash
+make bootstrap
+```
+
+The complete bootstrap is rerunnable and performs the local initialization in a
+controlled order:
 
 ```text
-/path/to/neuro_sleep_lakehouse_platform
+host prerequisite checks
+        |
+        v
+safe .env initialization
+        |
+        v
+reproducible .venv + project dependencies
+        |
+        v
+PostgreSQL + MinIO + Kafka
+        |
+        v
+MinIO buckets + SQL migrations/seeds + core smoke tests
+        |
+        v
+Kafka topic initialization
+        |
+        v
+Airflow metadata DB + runtime image + migrations
+        |
+        v
+Airflow scheduler + DAG processor + API server
+        |
+        v
+full platform readiness check
 ```
 
-Enter the project:
+On an existing environment, completed setup work is reused where safe. For
+example, an existing Airflow runtime image is not rebuilt on every bootstrap.
+
+The bootstrap creates `.env` safely from `.env.example` when `.env` does not
+exist. Existing configured `.env` files are preserved. Existing files with
+missing, empty, or placeholder credentials fail closed instead of being silently
+rewritten.
+
+The Python environment is also managed by bootstrap. It creates `.venv` when
+needed, installs the project in editable mode, validates the dependency contract,
+and skips dependency installation while the dependency fingerprint is unchanged.
+
+## 5. Run the Compact End-to-End Demo
+
+After bootstrap:
 
 ```bash
-cd "/path/to/neuro_sleep_lakehouse_platform"
+make demo
 ```
 
-## 3. Python Environment
+The demo uses one deterministic Sleep-EDF recording (`SC4001E`) and runs:
+
+```text
+PhysioNet
+  -> Bronze
+  -> Silver metadata + signals
+  -> PostgreSQL staging
+  -> dbt Warehouse + marts
+  -> Spark Gold signal features
+  -> Gold validation
+```
+
+The demo intentionally avoids the full high-volume dataset. Existing immutable
+Bronze/Silver/Gold publications are reused on rerun.
+
+Override the default recording only when a different compatible recording is
+already intended:
 
 ```bash
-cp .env.example .env
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+DEMO_RECORDING_KEY=SC4002E make demo
 ```
 
-Most direct Python commands use:
+## 6. Daily Local Lifecycle
+
+After the machine has been bootstrapped, normal local operation uses:
 
 ```bash
-PYTHONPATH=src
+make platform-up
+make platform-status
+make platform-down
 ```
 
-## 4. Start Local Services
+`make platform-up` starts PostgreSQL, MinIO, Kafka, and the three Airflow
+services, ensures the Kafka topic contract, and waits for readiness.
+
+`make platform-status` is read-only and reports the readiness of PostgreSQL,
+MinIO, Kafka, the Airflow scheduler, Airflow API server, and Airflow DAG
+processor.
+
+`make platform-down` stops those services without deleting persistent Docker
+volumes.
+
+Published host ports remain loopback-only by default. Docker-internal service
+communication continues to use Compose service names such as `postgres`,
+`minio`, and `kafka`; the loopback binding affects only access from the host.
+
+Operational state can be summarized separately with:
+
+```bash
+make ops-status
+```
+
+## 7. Focused Component Commands
+
+The unified lifecycle is the normal path. Lower-level commands remain available
+for focused development and recovery.
+
+### Targeted recording recovery / backfill
+
+For an existing signal-bearing Silver recording, reconcile only that recording
+through the downstream batch path:
+
+```bash
+make backfill RECORDING_KEY=SC4001E
+```
+
+The command starts from the current Silver publication. It does not download
+PhysioNet source data, delete immutable objects, or expand the signal cohort.
+`SLEEP_EDF_RECORDING_KEYS` limits Silver-to-staging publication discovery, and
+`SIGNAL_FEATURE_RECORDING_KEYS` applies the same key to Gold and integrated
+Gold. Existing complete publications are skipped; existing Gold publication
+logic retains its normal recovery behavior for incomplete published objects.
+
+The dbt step intentionally remains the normal set-based relational build. The
+Warehouse and marts are small compared with the signal path, so a special
+recording-specific dbt model path is not introduced only for backfill.
+
+This command is for recordings already present in the full-signal Silver
+subset. Metadata-only cohort expansion remains a separate operation.
+
+### PostgreSQL and MinIO
 
 ```bash
 make up
 make ps
+make buckets
+make migrate
+make migration-history-check
+make psql
 ```
 
-Equivalent Docker commands:
+`make migrate` tracks every manifest entry in `ops.sql_migration_history`
+using its repository path and SHA-256 checksum. The first run after this
+history mechanism is introduced executes the current manifest once and
+records its baseline checksums. Later runs skip unchanged registered files
+and execute only new manifest entries.
 
-```bash
-docker compose up -d postgres minio
-docker compose ps
-```
+Applied migration and seed files are immutable. If the checksum of a
+registered file changes, migration execution fails closed before any pending
+SQL file is applied. Schema or seed changes must therefore be added as a new
+numbered SQL file instead of editing an already registered file.
+
+`make migration-history-check` validates first-run registration, idempotent
+reruns, and checksum-drift rejection in a temporary PostgreSQL database.
 
 Required MinIO buckets:
 
@@ -81,15 +234,7 @@ quarantine
 logs
 ```
 
-Initialize them with:
-
-```bash
-make buckets
-```
-
-### Kafka runtime
-
-Kafka is deliberately separate from the base `make up` command.
+### Kafka
 
 ```bash
 make kafka-up
@@ -97,72 +242,14 @@ make kafka-init
 make kafka-topic-check
 ```
 
-The local host bootstrap is:
+The local host bootstrap is `localhost:9092`; the Docker-network listener is
+`kafka:19092`. Automatic topic creation is disabled. The application topic is
+created and validated from its version-controlled contract.
 
-```text
-localhost:9092
-```
-
-The Docker-network listener is:
-
-```text
-kafka:19092
-```
-
-Automatic topic creation is disabled. The application topic is created and
-validated from its version-controlled topic contract.
-
-## 5. Database Initialization
-
-Run all migrations and idempotent seeds registered in the manifest:
-
-```bash
-make migrate
-```
-
-Open PostgreSQL:
-
-```bash
-make psql
-```
-
-Exit with:
-
-```text
-\q
-```
-
-## 6. Bootstrap
-
-For a new local environment:
-
-```bash
-make bootstrap
-```
-
-Bootstrap starts PostgreSQL and MinIO, initializes buckets, runs SQL migrations
-and seeds, and runs the core smoke suite.
-
-## 7. Airflow Runtime and Bootstrap
-
-Airflow runs in separate containers with a custom project execution image. The
-image is built locally from the pinned upstream Airflow base image and contains
-the project code, Java 17, PySpark, and dbt required by the DAG tasks.
-
-Initialize or refresh the local Airflow runtime with:
+### Airflow
 
 ```bash
 make airflow-bootstrap
-```
-
-The bootstrap is rerunnable. It ensures Airflow environment values, initializes
-the Airflow metadata database, builds and validates `neurosleep-airflow:phase10`,
-prepares the state volume, runs metadata migrations, and starts the scheduler,
-DAG processor, and API server.
-
-Useful Airflow commands:
-
-```bash
 make airflow-up
 make airflow-down
 make airflow-ps
@@ -170,17 +257,13 @@ make airflow-smoke
 make airflow-password
 ```
 
-Airflow is available on port `8080`. The containers use service-network addresses
-for project dependencies:
+Airflow is available on port `8080`. Containers use `postgres:5432` and
+`http://minio:9000` inside the Compose network, while host commands continue to
+use `localhost:5433` and `localhost:9000`.
 
-```text
-PostgreSQL: postgres:5432
-MinIO:      http://minio:9000
-```
-
-The host workflow continues using `localhost:5433` and `localhost:9000`.
-`.env` is not copied into the Airflow image; Compose injects the container runtime
-configuration.
+`make airflow-bootstrap` remains available for focused Airflow initialization or
+repair. Normal fresh-machine setup should use `make bootstrap`, which includes
+the Airflow bootstrap.
 
 See [`airflow_orchestration.md`](airflow_orchestration.md).
 
@@ -196,7 +279,20 @@ SLEEP_EDF_MAX_RECORDINGS=4
 SLEEP_EDF_INCLUDE_CASSETTE=true
 SLEEP_EDF_INCLUDE_TELEMETRY=true
 SLEEP_EDF_INCLUDE_METADATA=true
+SLEEP_EDF_RECORDING_KEYS=
+SIGNAL_FEATURE_RECORDING_KEYS=
 ```
+
+`SLEEP_EDF_RECORDING_KEYS` is the optional source/Silver/staging run selector.
+`SIGNAL_FEATURE_RECORDING_KEYS` is the canonical optional selector shared by
+Gold signal features and integrated Gold. When the signal selector is empty,
+both jobs use every Warehouse-selected Silver representation that actually
+contains signals.
+
+The two settings are intentionally separate: the relational analytical cohort
+may contain metadata-only recordings, while the high-volume signal subset can
+remain smaller. Gold and integrated Gold must not maintain independent signal
+allowlists.
 
 Full profile:
 
@@ -205,6 +301,21 @@ DATA_PROFILE=full
 ```
 
 ## 9. Validation
+
+The fast repository-contract suite is:
+
+```bash
+make ci-check
+```
+
+The same command runs in `.github/workflows/ci.yml` on GitHub pushes and pull
+requests. It intentionally requires no project services and does not download or
+process Sleep-EDF signal data. It checks dependency alignment, SQL manifest
+integrity, Python compilation, shell syntax, the pure recording-scope regression,
+and repository hygiene.
+
+Docker-backed, database-backed, Kafka, Airflow, and high-volume Spark checks stay
+in the explicit local suites below.
 
 Common suites:
 
@@ -215,8 +326,14 @@ make silver-smoke
 make spark-smoke
 make gold-reliability-smoke
 make integrated-gold-reliability-smoke
+make batch-check
 make test
 ```
+
+`make batch-check` is the aggregate for the core batch smoke bundle shown
+above. `make test` is retained as a compatibility alias for that bundle; it
+does not claim to include Kafka, Airflow, Phase 12, or every high-volume
+feature regression.
 
 High-volume feature and Gold checks are explicit:
 
@@ -235,6 +352,7 @@ make phase9-check
 make phase10-check
 make phase11-check
 make phase12-check
+make phase13-check
 ```
 
 `phase9-check` runs the normal smoke suites, full Spark feature validation,
@@ -287,6 +405,25 @@ the existing 26-test Silver regression, and repository diff hygiene. The fixture
 use temporary local data and do not modify trusted Bronze/Silver datasets.
 
 See [`data_quality_hardening.md`](data_quality_hardening.md).
+
+### Phase 13 operational validation
+
+Run the complete Phase 13 boundary audit only after the full local platform is
+initialized and ready:
+
+```bash
+make phase13-check
+```
+
+This is intentionally a phase-boundary regression rather than a quick daily
+check. It validates the local doctor, lightweight CI contracts, full platform
+readiness, operational-health classification, SQL migration-history behavior,
+the compact demo, targeted recording backfill, the complete Phase 10 regression,
+the complete Phase 11 Kafka audit, the complete Phase 12 data-quality audit, and
+repository diff hygiene.
+
+For normal development, use the focused commands instead of repeatedly running
+the full Phase 13 audit.
 
 ## 10. Run Extract
 

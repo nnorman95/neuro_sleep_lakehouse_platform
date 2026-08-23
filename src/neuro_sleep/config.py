@@ -100,6 +100,7 @@ class Settings:
     sleep_edf_include_metadata: bool
     sleep_edf_recording_keys: tuple[str, ...] = ()
     silver_include_signals: bool = True
+    signal_feature_recording_keys: tuple[str, ...] = ()
 
     def safe_dict(
         self,
@@ -127,6 +128,9 @@ class Settings:
             "sleep_edf_include_metadata": self.sleep_edf_include_metadata,
             "sleep_edf_recording_keys": self.sleep_edf_recording_keys,
             "silver_include_signals": self.silver_include_signals,
+            "signal_feature_recording_keys": (
+                self.signal_feature_recording_keys
+            ),
         }
 
 
@@ -170,6 +174,9 @@ def get_settings() -> Settings:
         ),
         silver_include_signals=_get_bool_env(
             "SILVER_INCLUDE_SIGNALS", True
+        ),
+        signal_feature_recording_keys=_get_csv_env(
+            "SIGNAL_FEATURE_RECORDING_KEYS"
         ),
     )
 

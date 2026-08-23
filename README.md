@@ -17,6 +17,11 @@ Phase 12 adds **Data Quality Hardening** with controlled broken-data fixtures th
 prove existing Silver and staging boundaries fail closed on schema drift,
 manifest-integrity defects, publication inconsistencies, and subject-metadata
 identity defects.
+Phase 13 adds **Operational Hardening and Process Optimization**: repository
+prerequisite checks, safe environment initialization, reproducible Python setup,
+a unified local platform lifecycle, full clean-machine bootstrap, operational
+health reporting, compact demo and targeted backfill paths, tracked SQL
+migration history, and lightweight GitHub CI.
 
 ## Current state
 
@@ -313,7 +318,59 @@ quarantine path. The final `make phase12-check` audit also reruns the complete
 More detail is in
 [`docs/data_quality_hardening.md`](docs/data_quality_hardening.md).
 
+### Phase 13 operational hardening and process optimization
+
+Phase 13 focuses on reducing manual operating steps and closing reproducibility
+and recovery gaps without introducing another orchestration or monitoring stack.
+
+```text
+clean checkout:
+make doctor -> make bootstrap -> make demo -> make platform-status
+
+daily operation:
+make platform-up -> make platform-status -> make platform-down
+
+focused recovery:
+make backfill RECORDING_KEY=SC4001E
+
+repository contracts:
+make ci-check
+
+phase-boundary audit:
+make phase13-check
+```
+
+The phase adds terminal `ops.pipeline_run` state protection, read-only operational
+health reporting, safe `.env` initialization, reproducible `.venv` management,
+one full local platform lifecycle, loopback-only service bindings, one canonical
+signal-feature recording scope, targeted one-recording backfill, tracked SQL
+migration history with SHA-256 drift detection, and lightweight GitHub CI.
+
+The final Phase 13 audit intentionally reruns the complete Phase 10 regression
+(which includes the full Phase 9 data path), the Phase 11 Kafka audit, and the
+Phase 12 data-quality audit after validating the new Phase 13 operational
+controls.
+
+More detail is in
+[`docs/process_optimization.md`](docs/process_optimization.md).
+
 ## Validation
+
+GitHub Actions runs a lightweight repository-contract workflow on pushes and
+pull requests. The same checks can be reproduced locally without Docker,
+PostgreSQL, MinIO, Kafka, Airflow, Spark execution, or the full signal dataset:
+
+```bash
+make ci-check
+```
+
+This fast CI validates the Python/dependency contract, SQL migration manifest,
+Python syntax, shell syntax, the pure recording-scope regression, and repository
+hygiene. Runtime and high-volume integration suites remain explicit local
+checks; CI does not duplicate the existing Docker/Spark/Airflow regressions.
+`make batch-check` is the named aggregate for the core batch smoke bundle;
+`make test` remains a compatibility alias rather than implying every project
+regression is included.
 
 Current verified regression status:
 
@@ -343,6 +400,13 @@ Phase 11 Kafka audit:                     PASS
 Phase 12 broken-data fixture groups:          4/4 PASS
 Phase 12 Silver regression:                   26/26 PASS
 Phase 12 data-quality audit:                  PASS
+Phase 13 local prerequisite doctor:           PASS
+Phase 13 full platform lifecycle:             PASS
+Phase 13 targeted recording backfill:         PASS
+SQL migration history baseline:               46/46 registered
+SQL migration history unchanged rerun:        0 applied / 46 skipped
+Lightweight GitHub Actions:                   PASS
+Phase 13 operational hardening audit:         PASS
 ```
 
 The Phase 7 relational baseline also confirms:
@@ -357,28 +421,56 @@ ST7161J first annotated epoch:  14
 
 Two consecutive full dbt rebuilds produced the same recording-summary content
 checksum, providing a direct regression check for deterministic rebuild behavior.
-## Local setup
+## Quick start
+
+From a fresh checkout:
 
 ```bash
-cp .env.example .env
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/nnorman95/neuro_sleep_lakehouse_platform.git
+cd neuro_sleep_lakehouse_platform
+
+make doctor
 make bootstrap
-make airflow-bootstrap
+make demo
+make platform-status
 ```
 
-The project supports Python 3.11+. The current local development environment uses
+`make doctor` is read-only and checks host prerequisites before anything is
+created. `make bootstrap` creates the local environment and Python virtual
+environment when needed, starts PostgreSQL, MinIO, Kafka, and Airflow, initializes
+storage and databases, runs core smoke tests, and verifies full platform
+readiness. It is safe to rerun.
+
+`make demo` runs a deterministic one-recording path through Bronze, Silver,
+PostgreSQL staging, dbt Warehouse/marts, and Spark Gold signal features. It uses
+the existing idempotent outputs when they are already present.
+
+The project supports Python 3.11+. The current verified local environment uses
 Python 3.13.5 and PostgreSQL 18.4 on host port 5433.
+
+## Daily local lifecycle
+
+```bash
+make platform-up
+make platform-status
+make demo
+make platform-down
+```
+
+`make platform-down` stops local services without removing persistent Docker
+volumes.
 
 ## Common commands
 
+The commands above are the normal entrypoints. Lower-level commands remain
+available for focused development, validation, and recovery:
+
 ```bash
-make up
-make down
-make ps
-make buckets
-make migrate
+make help
+make ops-status
+make backfill RECORDING_KEY=SC4001E
+make migration-history-check
+make ci-check
 make smoke
 make reliability-smoke
 make silver-smoke
@@ -391,11 +483,6 @@ make feature-integration-check
 make integrated-signal-features
 make integrated-signal-features-check
 make integrated-gold-reliability-smoke
-make phase8-check
-make phase9-check
-make phase10-check
-make kafka-up
-make kafka-init
 make kafka-topic-check
 make kafka-producer-check
 make kafka-consumer-check
@@ -404,15 +491,15 @@ make kafka-ingestion-check
 make kafka-invalid-check
 make kafka-arrival-check
 make kafka-warehouse-check
-make phase11-check
-make phase12-quality-smoke
-make phase12-check
-make airflow-bootstrap
-make airflow-up
-make airflow-down
-make airflow-ps
 make airflow-smoke
 make airflow-password
+make phase8-check
+make phase9-check
+make phase10-check
+make phase11-check
+make phase12-check
+make phase13-check
+make batch-check
 make test
 make source-check
 make psql
@@ -445,8 +532,9 @@ a reproducible Airflow runtime and a thin end-to-end DAG. Phase 11 adds the loca
 Kafka/KRaft device-event path, durable restart-safe consumption, quarantine
 handling, arrival classification, and `warehouse.fact_device_event`. Phase 12
 hardens existing trusted boundaries with controlled broken-data fixtures and one
-canonical data-quality audit. No Phase 10, Phase 11, or Phase 12 release tag has
-been created yet.
+canonical data-quality audit. Phase 13 hardens clean-machine reproducibility,
+daily operations, targeted recovery, migration execution, and repository CI.
+No Phase 10, Phase 11, Phase 12, or Phase 13 release tag has been created yet.
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md)

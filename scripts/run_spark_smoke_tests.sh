@@ -15,15 +15,18 @@ python -m compileall -q src
 echo "python_compilation_status=success"
 echo
 
-echo "1/3 Check Spark runtime"
+echo "1/4 Check Spark runtime"
 python -m neuro_sleep.spark.runtime_smoke
 echo
+echo "2/4 Check canonical recording scope selection"
+python -m neuro_sleep.spark.recording_scope_smoke
+echo
 
-echo "2/3 Check fail-closed Silver signal input selection"
+echo "3/4 Check fail-closed Silver signal input selection"
 python -m neuro_sleep.spark.signal_input_smoke
 echo
 
-echo "3/3 Reconcile selected Silver signals through Spark + S3A"
+echo "4/4 Reconcile selected Silver signals through Spark + S3A"
 python -m neuro_sleep.spark.signal_read_reconciliation
 echo
 
