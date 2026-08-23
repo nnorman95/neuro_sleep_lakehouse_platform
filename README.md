@@ -409,6 +409,7 @@ available for focused development, validation, and recovery:
 make help
 make ops-status
 make backfill RECORDING_KEY=SC4001E
+make migration-history-check
 make smoke
 make reliability-smoke
 make silver-smoke
