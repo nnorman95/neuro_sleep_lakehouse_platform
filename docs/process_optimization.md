@@ -195,6 +195,16 @@ make kafka-warehouse-check
 make phase11-check
 make phase12-quality-smoke
 make phase12-check
+make doctor
+make bootstrap
+make platform-up
+make platform-status
+make platform-down
+make demo
+make backfill RECORDING_KEY=SC4001E
+make migration-history-check
+make ci-check
+make phase13-check
 ```
 
 This reduces the need to remember long combinations of Python module paths,
@@ -308,7 +318,102 @@ compilation, the existing 26-test Silver regression, and diff hygiene.
 This reduces repeated manual validation work without weakening correctness,
 lineage, quarantine behavior, or observability.
 
-## 13. What is deliberately not optimized
+## 13. Phase 13 operational hardening
+
+Phase 13 applies the same optimization rule to the developer/operator workflow:
+remove repeated manual work without hiding failure boundaries.
+
+### Reproducible local setup
+
+The normal clean-checkout path is reduced to four commands:
+
+```text
+make doctor
+make bootstrap
+make demo
+make platform-status
+```
+
+`make doctor` is read-only. `make bootstrap` safely initializes `.env`, creates
+or reuses `.venv`, starts PostgreSQL/MinIO/Kafka/Airflow, initializes storage and
+SQL state, and verifies readiness. The Python environment uses a dependency
+fingerprint, so unchanged dependencies do not trigger another editable install.
+
+### One platform lifecycle
+
+After initialization, normal restarts use:
+
+```text
+make platform-up
+make platform-status
+make platform-down
+```
+
+This replaces separate core, Kafka, and Airflow startup knowledge while preserving
+persistent Docker volumes. Published host ports are bound to loopback by default
+instead of all network interfaces.
+
+### Operational state safety
+
+`ops.pipeline_run` terminal states are immutable through the project helper: only
+`started` rows may transition to `success`, `failed`, or `skipped`. A second
+terminal transition is rejected instead of overwriting the original outcome.
+
+`make ops-status` separates current incidents from historical failures. Historical
+failed runs remain visible without automatically making the current platform
+unhealthy.
+
+### Canonical signal scope and targeted backfill
+
+`SIGNAL_FEATURE_RECORDING_KEYS` is the shared recording scope for Gold signal
+features, Gold validation, and integrated Gold. This removes separate Gold-only
+allowlists that could drift.
+
+Focused downstream recovery uses:
+
+```text
+make backfill RECORDING_KEY=SC4001E
+```
+
+The command starts from an existing Silver publication, limits staging and both
+Gold paths to one recording, reuses the normal dbt build, validates both Gold
+publications, and reports written/skipped/recovered counts. Complete immutable
+outputs are skipped rather than deleted and recomputed.
+
+### Tracked SQL execution
+
+`make migrate` records each manifest path and SHA-256 checksum in
+`ops.sql_migration_history`. After the one-time baseline registration, an
+unchanged manifest rerun executes zero SQL files. Editing an already registered
+migration or seed fails closed before pending SQL is applied.
+
+`make migration-history-check` proves first-run registration, idempotent rerun,
+and checksum-drift rejection in a temporary PostgreSQL database.
+
+### Lightweight repository CI
+
+`make ci-check` is the local equivalent of the GitHub Actions repository-contract
+workflow. It checks dependency alignment, command/config consistency, SQL manifest
+integrity, Python compilation, shell syntax, the pure recording-scope regression,
+and repository hygiene without starting the data platform or processing the
+116M+ signal-row dataset.
+
+This keeps fast repository feedback separate from expensive integration
+regressions.
+
+### Phase-boundary validation
+
+The final audit is:
+
+```text
+make phase13-check
+```
+
+It intentionally combines the new operational controls with the complete Phase 10,
+Phase 11, and Phase 12 audits. Heavy regressions remain phase-boundary checks, not
+something every edit or GitHub push repeats.
+
+## 14. What is deliberately not optimized
 
 The project does not currently add:
 
@@ -323,7 +428,7 @@ These omissions are part of the optimization strategy: operational simplicity is
 preferred over infrastructure or tuning that does not solve a demonstrated
 problem.
 
-## 14. Evidence to preserve in later phases
+## 15. Evidence to preserve in later phases
 
 Later phases should continue recording evidence such as:
 

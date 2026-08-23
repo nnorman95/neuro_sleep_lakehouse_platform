@@ -35,6 +35,7 @@ CANONICAL_TARGETS = {
     "batch-check",
     "test",
     "ops-status",
+    "phase13-check",
 }
 
 EXPECTED_BATCH_DEPS = (

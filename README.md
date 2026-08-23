@@ -318,6 +318,42 @@ quarantine path. The final `make phase12-check` audit also reruns the complete
 More detail is in
 [`docs/data_quality_hardening.md`](docs/data_quality_hardening.md).
 
+### Phase 13 operational hardening and process optimization
+
+Phase 13 focuses on reducing manual operating steps and closing reproducibility
+and recovery gaps without introducing another orchestration or monitoring stack.
+
+```text
+clean checkout:
+make doctor -> make bootstrap -> make demo -> make platform-status
+
+daily operation:
+make platform-up -> make platform-status -> make platform-down
+
+focused recovery:
+make backfill RECORDING_KEY=SC4001E
+
+repository contracts:
+make ci-check
+
+phase-boundary audit:
+make phase13-check
+```
+
+The phase adds terminal `ops.pipeline_run` state protection, read-only operational
+health reporting, safe `.env` initialization, reproducible `.venv` management,
+one full local platform lifecycle, loopback-only service bindings, one canonical
+signal-feature recording scope, targeted one-recording backfill, tracked SQL
+migration history with SHA-256 drift detection, and lightweight GitHub CI.
+
+The final Phase 13 audit intentionally reruns the complete Phase 10 regression
+(which includes the full Phase 9 data path), the Phase 11 Kafka audit, and the
+Phase 12 data-quality audit after validating the new Phase 13 operational
+controls.
+
+More detail is in
+[`docs/process_optimization.md`](docs/process_optimization.md).
+
 ## Validation
 
 GitHub Actions runs a lightweight repository-contract workflow on pushes and
@@ -364,6 +400,13 @@ Phase 11 Kafka audit:                     PASS
 Phase 12 broken-data fixture groups:          4/4 PASS
 Phase 12 Silver regression:                   26/26 PASS
 Phase 12 data-quality audit:                  PASS
+Phase 13 local prerequisite doctor:           PASS
+Phase 13 full platform lifecycle:             PASS
+Phase 13 targeted recording backfill:         PASS
+SQL migration history baseline:               46/46 registered
+SQL migration history unchanged rerun:        0 applied / 46 skipped
+Lightweight GitHub Actions:                   PASS
+Phase 13 operational hardening audit:         PASS
 ```
 
 The Phase 7 relational baseline also confirms:
@@ -455,6 +498,7 @@ make phase9-check
 make phase10-check
 make phase11-check
 make phase12-check
+make phase13-check
 make batch-check
 make test
 make source-check
@@ -488,8 +532,9 @@ a reproducible Airflow runtime and a thin end-to-end DAG. Phase 11 adds the loca
 Kafka/KRaft device-event path, durable restart-safe consumption, quarantine
 handling, arrival classification, and `warehouse.fact_device_event`. Phase 12
 hardens existing trusted boundaries with controlled broken-data fixtures and one
-canonical data-quality audit. No Phase 10, Phase 11, or Phase 12 release tag has
-been created yet.
+canonical data-quality audit. Phase 13 hardens clean-machine reproducibility,
+daily operations, targeted recovery, migration execution, and repository CI.
+No Phase 10, Phase 11, Phase 12, or Phase 13 release tag has been created yet.
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md)
