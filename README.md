@@ -61,7 +61,7 @@ quarantine   PostgreSQL inbox
 Airflow orchestrates the batch/lakehouse path by calling the same project
 commands that can be run manually. Kafka is a separate streaming path.
 
-## Data flow in plain language
+## Data flow
 
 1. **Download and verify the source data.**
    Sleep-EDF files are fetched from PhysioNet, checked against the official
